@@ -48,6 +48,8 @@
       "deb": {
         "depends": []
       }
-    }
+    },
+    "license": "MIT",
+    "copyright": "\u00a9 2026 Dragonir"
   }
 }

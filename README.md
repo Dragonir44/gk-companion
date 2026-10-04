@@ -83,3 +83,8 @@ python tools/schema-gen/gen_schema.py gk2 "/path/to/Graveyard Keeper 2"
 ## Roadmap
 
 - Generating schemas at runtime from the game DLLs, so layout changes need no app update
+
+## License
+
+MIT — see [LICENSE](LICENSE). Graveyard Keeper and its content belong to
+Lazy Bear Games; this app ships none of it and reads it from your install.

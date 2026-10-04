@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Crafting planner for Graveyard Keeper 1 & 2"
 authors = ["Dragonir <dragonir44@gmail.com>"]
 edition = "2021"
+license = "MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
