@@ -63,9 +63,9 @@ pub struct IconIndex {
 pub struct Entity {
     pub id: String,
     /// Localization key of the name; None when the game has none.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub desc: Option<String>,
     /// Carried overhead (logs, stone blocks): the games often give the
     /// heavy item and its hand-held pieces the same name.
@@ -89,7 +89,7 @@ pub struct Recipe {
     pub id: String,
     /// The craft's own name key ("Repair the zombie carousel"), when the
     /// game has one; otherwise it is named after what it makes or acts on.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
     /// Own icon (world crafts, buildings); otherwise use what it makes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -100,14 +100,14 @@ pub struct Recipe {
     pub inputs: Vec<Stack>,
     pub outputs: Vec<Stack>,
     /// Tech points produced (gk1 r/g/b crafts) — keyed r, g, b, ...
-    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub points: BTreeMap<String, f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub time: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub energy: Option<f64>,
     /// Object built (building recipes).
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub builds: Option<String>,
     pub hidden: bool,
     pub needs_unlock: bool,
@@ -119,14 +119,14 @@ pub struct Stack {
     /// Item id, or group id when `group` is set.
     pub item: String,
     pub count: f64,
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub group: bool,
     /// Drop chance in ]0, 1[; 0 when it depends on game state (luck...).
     /// None for guaranteed outputs.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub chance: Option<f64>,
     /// Original formula when the count depends on game state (perks...).
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub expr: Option<String>,
 }
 
@@ -135,7 +135,7 @@ pub struct Stack {
 pub struct Branch {
     /// Value of `Tech::branch`.
     pub id: i64,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
 }
 
@@ -143,9 +143,9 @@ pub struct Branch {
 #[serde(rename_all = "camelCase")]
 pub struct Tech {
     pub id: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub desc: Option<String>,
     /// Tree tab / branch.
     pub branch: i64,
@@ -169,10 +169,70 @@ pub struct Tech {
 pub struct ReputationLock {
     /// Character id; `name` is the key of its name.
     pub npc: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
     pub value: f64,
     /// Portrait sprite of the character.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub portrait: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Fields left out when empty must read back: the cache is written
+    /// with them omitted, and a cache that fails to load is re-extracted
+    /// on every launch.
+    #[test]
+    fn game_data_round_trips_with_omitted_fields() {
+        let stack = Stack { item: "nails".into(), count: 4.0, group: false, chance: None, expr: None };
+        let recipe = Recipe {
+            id: "nails".into(),
+            name: None,
+            icon: None,
+            kind: RecipeKind::Craft,
+            stations: vec![],
+            inputs: vec![stack.clone()],
+            outputs: vec![stack],
+            points: BTreeMap::new(),
+            time: None,
+            energy: None,
+            builds: None,
+            hidden: false,
+            needs_unlock: false,
+        };
+        let tech = Tech {
+            id: "t".into(),
+            name: None,
+            desc: None,
+            branch: 0,
+            parents: vec![],
+            x: 0.0,
+            y: 0.0,
+            cost: BTreeMap::new(),
+            unlocks: vec![],
+            hidden: false,
+            icon: None,
+            lock: None,
+        };
+        let data = GameData {
+            model_version: MODEL_VERSION,
+            game: GameId::Gk2,
+            fingerprint: "fp".into(),
+            unity_version: "6000".into(),
+            items: vec![Entity { id: "nails".into(), name: None, desc: None, heavy: false, icon: None }],
+            objects: vec![],
+            groups: BTreeMap::new(),
+            recipes: vec![recipe],
+            techs: vec![tech],
+            branches: vec![Branch { id: 0, name: None }],
+            locales: BTreeMap::new(),
+            icons: IconIndex::default(),
+        };
+        let json = serde_json::to_string(&data).unwrap();
+        assert!(!json.contains("\"points\""), "empty fields are omitted");
+        let back: GameData = serde_json::from_str(&json).expect("cache must read back");
+        assert_eq!(serde_json::to_string(&back).unwrap(), json);
+    }
 }

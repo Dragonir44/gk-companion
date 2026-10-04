@@ -88,7 +88,11 @@ fn cache_path(app: &AppHandle, game: GameId) -> CmdResult<PathBuf> {
 
 /// A cache is usable when its model is current and its icon sheets exist.
 fn read_cache(app: &AppHandle, game: GameId) -> Option<GameData> {
-    let data: GameData = read_json(&cache_path(app, game).ok()?)?;
+    let bytes = std::fs::read(cache_path(app, game).ok()?).ok()?;
+    // Unreadable caches are re-extracted, which can take seconds: say why.
+    let data: GameData = serde_json::from_slice(&bytes)
+        .map_err(|e| eprintln!("cache of {} unreadable, re-extracting: {e}", game.as_str()))
+        .ok()?;
     let dir = cache_dir(app).ok()?;
     let sheets_ok = data.icons.sheets.iter().all(|s| dir.join(s).is_file());
     (data.model_version == MODEL_VERSION && sheets_ok).then_some(data)
