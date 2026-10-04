@@ -50,6 +50,15 @@
       }
     },
     "license": "MIT",
-    "copyright": "\u00a9 2026 Dragonir"
+    "copyright": "\u00a9 2026 Dragonir",
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEVGRTIwN0ExNDI2MzM2MTYKUldRV05tTkNvUWZpNzd3cURva3p5REUweDZPUEZ3NFBrN2pxazdzOG1oMHduSXhRemh1ZGlHSlIK",
+      "endpoints": [
+        "https://github.com/Dragonir44/gk-companion/releases/latest/download/latest.json"
+      ]
+    }
   }
 }

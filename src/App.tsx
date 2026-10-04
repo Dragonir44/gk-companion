@@ -10,6 +10,7 @@ import { fmt, LANGUAGES, strings } from "./i18n";
 import { namer } from "./names";
 import { unlockedBy, unlocks } from "./progress";
 import { SaveSelector } from "./components/SaveSelector";
+import { UpdateBanner } from "./components/UpdateBanner";
 import { useStore } from "./store";
 import { GAMES } from "./types";
 import "./App.css";
@@ -102,6 +103,8 @@ export default function App() {
           </select>
         </label>
       </header>
+
+      <UpdateBanner t={t} />
 
       {warningText && (
         <div className="banner">

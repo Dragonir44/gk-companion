@@ -20,6 +20,9 @@ Download from the [releases](https://github.com/Dragonir44/gk-companion/releases
 - **macOS**: the `.dmg` (Apple Silicon and Intel). Not notarized: right-click
   the app → *Open* the first time.
 
+Updates are offered inside the app (AppImage, Windows, macOS; deb/rpm when
+signed packages are published) and installed in place.
+
 The game must be installed: the app finds it through Steam (or you pick its
 folder) and reads everything from there. It also follows your latest save.
 
@@ -52,7 +55,11 @@ folder) and reads everything from there. It also follows your latest save.
 Bump the version in `package.json`, `src-tauri/Cargo.toml` and
 `src-tauri/tauri.conf.json`, then push a matching tag (`git tag v0.2.0 &&
 git push origin v0.2.0`). The `release` workflow builds every platform into a
-draft release to check and publish by hand.
+draft release to check and publish by hand. Builds are signed for the
+in-app updater with the `TAURI_SIGNING_PRIVATE_KEY` and
+`TAURI_SIGNING_PRIVATE_KEY_PASSWORD` repository secrets (public key in
+`tauri.conf.json`); the workflow also publishes `latest.json`, which installed
+apps read from the latest published release.
 
 ## Development
 

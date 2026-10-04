@@ -8,6 +8,9 @@
 //! (`NoDisplay`, never listed in menus) is written with the icon, and kept
 //! up to date when the executable moves.
 
+// Only called by release builds (dev builds run from target/).
+#![cfg_attr(debug_assertions, allow(dead_code))]
+
 use std::path::{Path, PathBuf};
 
 /// Marks entries written by this module, the only ones it may rewrite.

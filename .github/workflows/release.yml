@@ -1,6 +1,10 @@
 # Builds installers for Linux, Windows and macOS when a version tag is
 # pushed (git tag v0.1.0 && git push origin v0.1.0), and attaches them to a
 # *draft* GitHub release, published by hand after checking it.
+#
+# Updater: builds are signed with the TAURI_SIGNING_PRIVATE_KEY[_PASSWORD]
+# secrets, and latest.json (read by the app from the latest published
+# release) is assembled from the signatures.
 
 name: release
 
@@ -76,10 +80,16 @@ jobs:
         env:
           # linuxdeploy's strip chokes on some newer ELF sections.
           NO_STRIP: "1"
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: npx tauri build --bundles ${{ matrix.bundles }} ${{ matrix.args }}
 
+      # Repacking changes the AppImage: the script re-signs it.
       - name: Drop bundled libwayland from the AppImage
         if: runner.os == 'Linux'
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: bash scripts/fix-appimage-wayland.sh
 
       - name: Upload to the draft release
@@ -96,5 +106,43 @@ jobs:
             gh release upload "$TAG" "$dest" --clobber
             found=$((found + 1))
           done < <(find src-tauri/target -path '*/release/bundle/*' -type f \
-            \( -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' -o -name '*-setup.exe' -o -name '*.dmg' \))
+            \( -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' -o -name '*-setup.exe' -o -name '*.dmg' \
+               -o -name '*.app.tar.gz' -o -name '*.sig' \))
           [ "$found" -gt 0 ] || { echo "no bundles found"; exit 1; }
+
+  # latest.json for the in-app updater, from the uploaded signatures.
+  manifest:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build and upload latest.json
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir sigs && cd sigs
+          gh release download "$TAG" --pattern '*.sig'
+          version="${TAG#v}"
+          base="https://github.com/${{ github.repository }}/releases/download/$TAG"
+          # Linux keys name the install type, never a generic linux-x86_64:
+          # a .deb install must not be "updated" with the AppImage.
+          entry() { # platform, asset, optional
+            if [ ! -f "$2.sig" ]; then
+              [ "${3:-}" = optional ] && return 0
+              echo "missing $2.sig" >&2; exit 1
+            fi
+            jq -n --arg sig "$(cat "$2.sig")" --arg url "$base/$2" '{signature: $sig, url: $url}' > "platform-$1.json"
+          }
+          entry linux-x86_64-appimage "GK-Companion_${version}_amd64.AppImage"
+          entry linux-x86_64-deb "GK-Companion_${version}_amd64.deb" optional
+          entry linux-x86_64-rpm "GK-Companion-${version}-1.x86_64.rpm" optional
+          entry windows-x86_64 "GK-Companion_${version}_x64-setup.exe"
+          entry darwin-aarch64 "GK-Companion.app.tar.gz"
+          entry darwin-x86_64 "GK-Companion.app.tar.gz"
+          platforms=$(for f in platform-*.json; do k=${f#platform-}; jq -n --arg k "${k%.json}" --slurpfile v "$f" '{($k): $v[0]}'; done | jq -s add)
+          jq -n --arg v "$version" --arg date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg notes "https://github.com/${{ github.repository }}/releases/tag/$TAG" \
+            --argjson platforms "$platforms" \
+            '{version: $v, notes: $notes, pub_date: $date, platforms: $platforms}' > latest.json
+          cat latest.json
+          gh release upload "$TAG" latest.json --clobber

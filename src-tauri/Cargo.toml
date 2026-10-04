@@ -27,6 +27,8 @@ thiserror = "2"
 dirs = "6"
 lz4_flex = { version = "0.11", default-features = false, features = ["safe-decode"] }
 png = "0.17"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
 tauri-plugin-dialog = "2"
 
 

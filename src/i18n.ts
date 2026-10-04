@@ -81,6 +81,11 @@ const fr = {
   remainingCost: "Reste à rechercher",
   researched: "Recherchée",
   researchable: "Recherchable maintenant",
+  updateAvailable: "Version {version} disponible.",
+  updateInstall: "Installer et redémarrer",
+  updateLater: "Plus tard",
+  updating: "Téléchargement…",
+  updateFailed: "Échec de la mise à jour : {error}",
 } as const;
 
 export type Strings = { [K in keyof typeof fr]: string };
@@ -165,6 +170,11 @@ const en: Strings = {
   remainingCost: "Left to research",
   researched: "Researched",
   researchable: "Researchable now",
+  updateAvailable: "Version {version} is available.",
+  updateInstall: "Install and restart",
+  updateLater: "Later",
+  updating: "Downloading…",
+  updateFailed: "Update failed: {error}",
 };
 
 const UI: Record<string, Strings> = { fr, en };

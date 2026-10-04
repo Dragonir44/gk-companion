@@ -721,3 +721,9 @@ button.link {
 .state-pill.ready {
   background: color-mix(in srgb, var(--accent) 25%, transparent);
 }
+.update-banner {
+  background: color-mix(in srgb, var(--pt-g) 16%, var(--panel));
+}
+.error-text {
+  color: var(--danger);
+}
