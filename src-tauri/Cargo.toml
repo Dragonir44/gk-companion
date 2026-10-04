@@ -1,6 +1,6 @@
 [package]
 name = "gk-companion"
-version = "0.1.3"
+version = "0.1.4"
 description = "Crafting planner for Graveyard Keeper 1 & 2"
 authors = ["Dragonir <dragonir44@gmail.com>"]
 edition = "2021"
