@@ -1,0 +1,154 @@
+// UI strings. Game texts (items, recipes...) come from the games' own
+// localization, extracted with the data; only the app chrome lives here.
+
+const fr = {
+  appTitle: "Compagnon Graveyard Keeper",
+  gk1: "Graveyard Keeper",
+  gk2: "Graveyard Keeper 2",
+  language: "Langue",
+  loading: "Lecture des données du jeu…",
+  search: "Rechercher un objet, une construction, un atelier…",
+  showHidden: "Recettes cachées",
+  noResults: "Aucun résultat",
+  add: "Ajouter",
+  building: "Construction",
+  craft: "Craft",
+  lists: "Listes",
+  newList: "Nouvelle liste",
+  defaultListName: "Ma liste",
+  rename: "Renommer",
+  delete: "Supprimer",
+  confirmDelete: "Supprimer la liste « {name} » ?",
+  emptyList: "Liste vide : ajoute des crafts depuis la recherche.",
+  times: "fois",
+  remove: "Retirer",
+  materials: "Matériaux",
+  steps: "Étapes",
+  tree: "Arbre",
+  rawMaterials: "À récolter ou acheter",
+  anyOf: "Au choix",
+  owned: "J'ai",
+  usedFromStock: "Pris dans ton stock",
+  surplus: "Restera en plus",
+  techPoints: "Points de recherche gagnés",
+  nothingToGather: "Rien à récolter : tu as tout.",
+  cyclesNote: "Boucle de craft évitée, traité comme matière brute :",
+  craftIt: "Fabriquer",
+  gatherIt: "Récolter / acheter",
+  production: "production",
+  at: "à",
+  anywhere: "n'importe où",
+  chance: "chance",
+  random: "aléatoire",
+  dependsOnPerks: "Dépend des perks : {expr}",
+  gameNotFound: "{game} introuvable dans tes bibliothèques Steam.",
+  chooseFolder: "Choisir le dossier du jeu",
+  resetFolder: "Détection automatique",
+  notAGameFolder: "Ce dossier ne contient pas le jeu.",
+  staleNotFound: "Jeu introuvable : données du dernier passage affichées.",
+  staleUpdated: "Le jeu a été mis à jour et sa structure a changé : données de la version précédente affichées en attendant une mise à jour de l'app.",
+  staleFailed: "Lecture du jeu impossible : données du dernier passage affichées.",
+  extracted: "Données relues depuis le jeu",
+  cached: "Données à jour",
+  error: "Erreur",
+  retry: "Réessayer",
+  recipesCount: "{n} recettes",
+  stepsEmpty: "Aucune étape intermédiaire.",
+  heavy: "lourd",
+  world: "Décor",
+} as const;
+
+export type Strings = { [K in keyof typeof fr]: string };
+
+const en: Strings = {
+  appTitle: "Graveyard Keeper Companion",
+  gk1: "Graveyard Keeper",
+  gk2: "Graveyard Keeper 2",
+  language: "Language",
+  loading: "Reading game data…",
+  search: "Search an item, a building, a workstation…",
+  showHidden: "Hidden recipes",
+  noResults: "No results",
+  add: "Add",
+  building: "Building",
+  craft: "Craft",
+  lists: "Lists",
+  newList: "New list",
+  defaultListName: "My list",
+  rename: "Rename",
+  delete: "Delete",
+  confirmDelete: "Delete the list “{name}”?",
+  emptyList: "Empty list: add crafts from the search.",
+  times: "times",
+  remove: "Remove",
+  materials: "Materials",
+  steps: "Steps",
+  tree: "Tree",
+  rawMaterials: "To gather or buy",
+  anyOf: "Any of",
+  owned: "Owned",
+  usedFromStock: "Taken from your stock",
+  surplus: "Left over",
+  techPoints: "Tech points earned",
+  nothingToGather: "Nothing to gather: you have everything.",
+  cyclesNote: "Crafting loop avoided, treated as raw:",
+  craftIt: "Craft",
+  gatherIt: "Gather / buy",
+  production: "production",
+  at: "at",
+  anywhere: "anywhere",
+  chance: "chance",
+  random: "random",
+  dependsOnPerks: "Depends on perks: {expr}",
+  gameNotFound: "{game} was not found in your Steam libraries.",
+  chooseFolder: "Choose the game folder",
+  resetFolder: "Automatic detection",
+  notAGameFolder: "This folder does not contain the game.",
+  staleNotFound: "Game not found: showing data from the last run.",
+  staleUpdated: "The game was updated and its data layout changed: showing the previous version's data until the app is updated.",
+  staleFailed: "Could not read the game: showing data from the last run.",
+  extracted: "Data re-read from the game",
+  cached: "Data up to date",
+  error: "Error",
+  retry: "Retry",
+  recipesCount: "{n} recipes",
+  stepsEmpty: "No intermediate steps.",
+  heavy: "heavy",
+  world: "World",
+};
+
+const UI: Record<string, Strings> = { fr, en };
+
+/** Display names of the games' locale codes. */
+export const LANGUAGES: Record<string, string> = {
+  en: "English",
+  fr: "Français",
+  de: "Deutsch",
+  es: "Español",
+  it: "Italiano",
+  pl: "Polski",
+  "pt-br": "Português (BR)",
+  ru: "Русский",
+  tr: "Türkçe",
+  ja: "日本語",
+  ko: "한국어",
+  zh_cn: "简体中文",
+};
+
+/** UI strings for a game locale; untranslated languages fall back to English. */
+export function strings(lang: string): Strings {
+  return UI[lang] ?? en;
+}
+
+export function fmt(s: string, vars: Record<string, string | number>): string {
+  return s.replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? ""));
+}
+
+/** Best game locale for the system language. */
+export function defaultLang(): string {
+  const nav = (navigator.language || "en").toLowerCase();
+  if (nav.startsWith("pt")) return "pt-br";
+  if (nav.startsWith("zh")) return "zh_cn";
+  const base = nav.split("-")[0];
+  return base in LANGUAGES ? base : "en";
+}

@@ -1,0 +1,106 @@
+import { open } from "@tauri-apps/plugin-dialog";
+import { useEffect, useMemo } from "react";
+
+import { GameCtx } from "./components/ctx";
+import { ListPanel } from "./components/ListPanel";
+import { Results } from "./components/Results";
+import { Search } from "./components/Search";
+import { fmt, LANGUAGES, strings } from "./i18n";
+import { namer } from "./names";
+import { useStore } from "./store";
+import { GAMES } from "./types";
+import "./App.css";
+
+export default function App() {
+  const { ready, game, lang, games, statuses } = useStore();
+  const { init, selectGame, setLang, loadGame, setGamePath } = useStore.getState();
+  const t = strings(lang);
+  const g = games[game];
+
+  useEffect(() => {
+    void init();
+  }, [init]);
+
+  const ctx = useMemo(() => {
+    if (!g?.index) return null;
+    return { t, n: namer(g.index.data, lang, t.heavy), idx: g.index };
+  }, [g?.index, lang, t]);
+
+  const languages = Object.keys(g?.result?.data.locales ?? LANGUAGES).filter((l) => l in LANGUAGES);
+  const status = statuses.find((s) => s.game === game);
+
+  const chooseFolder = async () => {
+    const dir = await open({ directory: true, title: t.chooseFolder });
+    if (typeof dir !== "string") return;
+    try {
+      await setGamePath(game, dir);
+    } catch {
+      alert(t.notAGameFolder);
+    }
+  };
+
+  const warning = g?.result?.warning;
+  const warningText =
+    warning === "game-not-found" ? t.staleNotFound : warning === "game-updated" ? t.staleUpdated : warning ? t.staleFailed : null;
+
+  return (
+    <div className="app">
+      <header className="topbar">
+        <h1>{t.appTitle}</h1>
+        <nav className="games">
+          {GAMES.map((id) => (
+            <button key={id} className={id === game ? "active" : ""} onClick={() => selectGame(id)}>
+              {t[id]}
+            </button>
+          ))}
+        </nav>
+        <label className="lang">
+          <span className="sr-only">{t.language}</span>
+          <select value={lang} onChange={(e) => setLang(e.target.value)}>
+            {languages.map((l) => (
+              <option key={l} value={l}>
+                {LANGUAGES[l]}
+              </option>
+            ))}
+          </select>
+        </label>
+      </header>
+
+      {warningText && (
+        <div className="banner">
+          {warningText}
+          {warning === "game-not-found" && <button onClick={chooseFolder}>{t.chooseFolder}</button>}
+        </div>
+      )}
+
+      {!ready || !g || g.status === "loading" ? (
+        <main className="center muted">{t.loading}</main>
+      ) : g.status === "error" ? (
+        <main className="center">
+          <div className="setup">
+            <p>{g.error?.startsWith("game-not-found") ? fmt(t.gameNotFound, { game: t[game] }) : `${t.error} : ${g.error}`}</p>
+            <div className="row">
+              <button className="primary" onClick={chooseFolder}>
+                {t.chooseFolder}
+              </button>
+              {status?.manual && <button onClick={() => setGamePath(game, null)}>{t.resetFolder}</button>}
+              <button onClick={() => loadGame(game)}>{t.retry}</button>
+            </div>
+          </div>
+        </main>
+      ) : ctx ? (
+        <GameCtx.Provider value={ctx}>
+          <main className="layout">
+            <Search />
+            <ListPanel />
+            <Results />
+          </main>
+          <footer className="statusbar muted">
+            {g.result?.freshness === "extracted" ? t.extracted : t.cached} · {fmt(t.recipesCount, { n: ctx.idx.data.recipes.length })}
+            {status?.install && <span title={status.install.root}> · {status.install.root}</span>}
+          </footer>
+        </GameCtx.Provider>
+      ) : null}
+    </div>
+  );
+}
