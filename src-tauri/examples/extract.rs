@@ -9,7 +9,7 @@ fn main() {
         _ => panic!("usage: extract gk1|gk2 <game dir> [out.json]"),
     };
     let t = std::time::Instant::now();
-    let extracted = extract::extract(game, std::path::Path::new(&args[2])).unwrap_or_else(|e| panic!("{e}"));
+    let extracted = extract::extract(game, std::path::Path::new(&args[2]), None).unwrap_or_else(|e| panic!("{e}"));
     let mut data = extracted.data;
     println!("extracted in {:?}", t.elapsed());
     let named = |es: &[gk_companion_lib::model::Entity]| es.iter().filter(|e| e.name.is_some()).count();

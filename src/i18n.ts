@@ -2,7 +2,7 @@
 // localization, extracted with the data; only the app chrome lives here.
 
 const fr = {
-  appTitle: "Compagnon Graveyard Keeper",
+  appTitle: "GK Companion",
   gk1: "Graveyard Keeper",
   gk2: "Graveyard Keeper 2",
   language: "Langue",
@@ -68,7 +68,7 @@ const fr = {
   addAll: "Tout ajouter à la liste",
   reputation: "réputation {value}",
   save: "Sauvegarde",
-  latestSave: "Dernière sauvegarde",
+  latestSave: "Dernière",
   noSave: "Sans sauvegarde",
   day: "jour {n}",
   justNow: "à l'instant",
@@ -86,12 +86,18 @@ const fr = {
   updateLater: "Plus tard",
   updating: "Téléchargement…",
   updateFailed: "Échec de la mise à jour : {error}",
+  refreshing: "Mise à jour des données du jeu…",
+  gameBuild: "build {build}",
+  report: "Signaler",
+  reportBug: "Signaler un bug",
+  reportFeature: "Proposer une idée",
+  reportHint: "Ouvre un formulaire GitHub pré-rempli (compte GitHub requis).",
 } as const;
 
 export type Strings = { [K in keyof typeof fr]: string };
 
 const en: Strings = {
-  appTitle: "Graveyard Keeper Companion",
+  appTitle: "GK Companion",
   gk1: "Graveyard Keeper",
   gk2: "Graveyard Keeper 2",
   language: "Language",
@@ -157,7 +163,7 @@ const en: Strings = {
   addAll: "Add all to the list",
   reputation: "reputation {value}",
   save: "Save",
-  latestSave: "Latest save",
+  latestSave: "Latest",
   noSave: "No save",
   day: "day {n}",
   justNow: "just now",
@@ -175,6 +181,12 @@ const en: Strings = {
   updateLater: "Later",
   updating: "Downloading…",
   updateFailed: "Update failed: {error}",
+  refreshing: "Updating game data…",
+  gameBuild: "build {build}",
+  report: "Report",
+  reportBug: "Report a bug",
+  reportFeature: "Suggest a feature",
+  reportHint: "Opens a prefilled GitHub form (GitHub account needed).",
 };
 
 const UI: Record<string, Strings> = { fr, en };

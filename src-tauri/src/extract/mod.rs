@@ -87,21 +87,29 @@ fn data_dir(root: &Path) -> Result<PathBuf, ExtractError> {
     Err(ExtractError::Missing(format!("no *_Data folder in {}", root.display())))
 }
 
-/// Changes whenever the files the extraction reads change.
-pub fn fingerprint(root: &Path) -> Result<String, ExtractError> {
+/// Changes whenever the files the extraction reads change. With a Steam
+/// build id, file dates are left out: Steam may touch files (verify,
+/// move) without changing the game.
+pub fn fingerprint(root: &Path, build_id: Option<&str>) -> Result<String, ExtractError> {
     let data = data_dir(root)?;
     let mut parts = vec![format!("m{MODEL_VERSION}")];
+    if let Some(b) = build_id {
+        parts.push(format!("b{b}"));
+    }
     // The Addressables catalog changes whenever gk2's bundles do.
     for f in ["resources.assets", "Managed/Assembly-CSharp.dll", "StreamingAssets/aa/catalog.bin"] {
         let p = data.join(f);
         let Ok(meta) = std::fs::metadata(&p) else { continue };
         let mtime = meta.modified().ok().and_then(|t| t.duration_since(UNIX_EPOCH).ok()).map(|d| d.as_secs());
-        parts.push(format!("{}:{}", meta.len(), mtime.unwrap_or(0)));
+        match build_id {
+            Some(_) => parts.push(meta.len().to_string()),
+            None => parts.push(format!("{}:{}", meta.len(), mtime.unwrap_or(0))),
+        }
     }
     Ok(parts.join("-"))
 }
 
-pub fn extract(game: GameId, root: &Path) -> Result<Extracted, ExtractError> {
+pub fn extract(game: GameId, root: &Path, build_id: Option<&str>) -> Result<Extracted, ExtractError> {
     let schema = Schema::parse(match game {
         GameId::Gk1 => GK1_SCHEMA,
         GameId::Gk2 => GK2_SCHEMA,
@@ -178,7 +186,8 @@ pub fn extract(game: GameId, root: &Path) -> Result<Extracted, ExtractError> {
     let data = GameData {
         model_version: MODEL_VERSION,
         game,
-        fingerprint: fingerprint(root)?,
+        fingerprint: fingerprint(root, build_id)?,
+        game_build: build_id.map(str::to_string),
         unity_version: file.unity_version.clone(),
         items: n.items,
         objects: n.objects,

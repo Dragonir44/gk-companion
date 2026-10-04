@@ -727,3 +727,80 @@ button.link {
 .error-text {
   color: var(--danger);
 }
+
+/* --- Status bar, report menu ----------------------------------------- */
+
+.statusbar {
+  display: flex;
+  gap: 12px;
+}
+.status-left {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.app-version {
+  flex: none;
+}
+.refreshing {
+  color: var(--accent);
+}
+.spinner {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  vertical-align: -1px;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.report-menu {
+  position: relative;
+}
+.report-menu .menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 240px;
+  padding: 8px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 35%);
+}
+.report-menu .menu button {
+  text-align: left;
+}
+.report-menu .menu p {
+  margin: 4px 2px 0;
+}
+.topbar {
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+.topbar h1,
+.topbar button {
+  white-space: nowrap;
+}
+.save-select select {
+  max-width: 260px;
+}
+/* Everything after the view switch sits on the right, whichever is shown. */
+.topbar .views {
+  margin-right: auto;
+}
+.topbar .save-select,
+.topbar .lang {
+  margin-left: 0;
+}

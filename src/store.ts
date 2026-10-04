@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { create } from "zustand";
 
 import { buildIndex, type Index } from "./calc";
@@ -41,7 +42,8 @@ interface State {
 
   init(): Promise<void>;
   selectGame(game: GameId): void;
-  loadGame(game: GameId): Promise<void>;
+  /** `silent`: keep showing the current data while loading (refreshes). */
+  loadGame(game: GameId, silent?: boolean): Promise<void>;
   setGamePath(game: GameId, path: string | null): Promise<void>;
   setLang(lang: string): void;
   setShowHidden(v: boolean): void;
@@ -149,6 +151,16 @@ export const useStore = create<State>((set, get) => {
         lists: file?.lists ?? [],
         active: file?.active ?? {},
       });
+      // Background re-extraction after a game update (see load_game).
+      listen<GameId>("game-data-updated", (e) => void get().loadGame(e.payload, true)).catch(() => {});
+      listen<{ game: GameId; code: string }>("game-data-failed", ({ payload }) =>
+        set((s) => {
+          const g = s.games[payload.game];
+          if (!g?.result) return {};
+          const result = { ...g.result, freshness: "stale" as const, warning: payload.code };
+          return { games: { ...s.games, [payload.game]: { ...g, result } } };
+        }),
+      ).catch(() => {});
       await get().loadGame(game);
     },
 
@@ -159,14 +171,14 @@ export const useStore = create<State>((set, get) => {
       if (!g || g.status === "error" || g.status === "idle") void get().loadGame(game);
     },
 
-    async loadGame(game) {
-      set((s) => ({ games: { ...s.games, [game]: { status: "loading" } } }));
+    async loadGame(game, silent = false) {
+      if (!silent) set((s) => ({ games: { ...s.games, [game]: { status: "loading" } } }));
       try {
         const result = await invoke<LoadResult>("load_game", { game });
         const index = buildIndex(result.data);
         set((s) => ({ games: { ...s.games, [game]: { status: "ready", result, index } } }));
       } catch (e) {
-        set((s) => ({ games: { ...s.games, [game]: { status: "error", error: String(e) } } }));
+        if (!silent) set((s) => ({ games: { ...s.games, [game]: { status: "error", error: String(e) } } }));
       }
     },
 

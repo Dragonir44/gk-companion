@@ -11,9 +11,9 @@ function ago(ms: number, t: Strings): string {
   return new Date(ms).toLocaleDateString();
 }
 
-function slotLabel(s: SaveSlot, t: Strings): string {
+function slotLabel(s: SaveSlot, t: Strings, withAge = true): string {
   const day = s.info?.day !== undefined ? ` · ${fmt(t.day, { n: s.info.day })}` : "";
-  return `${s.id}${day} · ${ago(s.modified, t)}`;
+  return `${s.id}${day}${withAge ? ` · ${ago(s.modified, t)}` : ""}`;
 }
 
 /** Which save to follow; hidden for games whose saves can't be read yet. */
@@ -31,7 +31,7 @@ export function SaveSelector({ t }: { t: Strings }) {
       <select value={choice ?? ""} onChange={(e) => setSaveChoice(game, e.target.value || undefined)} aria-label={t.save}>
         <option value="">
           {t.latestSave}
-          {save.slots[0] ? ` (${slotLabel(save.slots[0], t)})` : ""}
+          {save.slots[0] ? ` : ${slotLabel(save.slots[0], t, false)}` : ""}
         </option>
         {save.slots.map((s) => (
           <option key={s.id} value={s.id}>

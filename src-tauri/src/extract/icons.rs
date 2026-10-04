@@ -26,6 +26,8 @@ const FORMAT_ARGB32: i64 = 5;
 /// shader; replaced here by a dark outline close to the in-game look.
 const OUTLINE_KEY: [u8; 3] = [0, 0, 255];
 const OUTLINE: [u8; 3] = [34, 26, 30];
+/// Bundle scan threads; more mostly contend for the disk.
+const MAX_SCAN_THREADS: usize = 8;
 /// Enough of a bundle's start for its directory and first block.
 const BUNDLE_PEEK: usize = 256 * 1024;
 
@@ -253,13 +255,21 @@ fn atlas_bundles(data: &Path, schema: &Schema) -> Result<Vec<PathBuf>, ExtractEr
         .map(|e| e.path())
         .find(|p| p.is_dir() && p.file_name().is_some_and(|n| n != "AddressablesLink"))
         .ok_or_else(|| ExtractError::Missing("Addressables bundles".into()))?;
-    let mut found = Vec::new();
-    for entry in std::fs::read_dir(&platform)?.flatten() {
-        let path = entry.path();
-        if path.extension().is_some_and(|e| e == "bundle") && has_atlas(&path, schema).unwrap_or(false) {
-            found.push(path);
-        }
-    }
+    let bundles: Vec<PathBuf> = std::fs::read_dir(&platform)?
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|e| e == "bundle"))
+        .collect();
+    // Tens of thousands of small reads: spread them over a few threads.
+    let workers = std::thread::available_parallelism().map_or(4, |n| n.get()).min(MAX_SCAN_THREADS);
+    let chunk = bundles.len().div_ceil(workers).max(1);
+    let mut found: Vec<PathBuf> = std::thread::scope(|scope| {
+        let handles: Vec<_> = bundles
+            .chunks(chunk)
+            .map(|part| scope.spawn(move || part.iter().filter(|p| has_atlas(p, schema).unwrap_or(false)).cloned().collect::<Vec<_>>()))
+            .collect();
+        handles.into_iter().flat_map(|h| h.join().unwrap_or_default()).collect()
+    });
     found.sort();
     Ok(found)
 }

@@ -1,0 +1,21 @@
+name: Proposer une idée / Suggest a feature
+description: Une fonctionnalité ou amélioration qui te serait utile. / A feature or improvement you'd find useful.
+title: "[Idée] "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: Ton idée / Your idea
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Pourquoi, dans quelle situation ? / Why, in which situation?
+      description: Ce que tu essayais de faire en jeu aide à trouver la bonne solution. / What you were trying to do in game helps find the right solution.
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostic (rempli par l'app) / Diagnostics (filled by the app)
+      render: text

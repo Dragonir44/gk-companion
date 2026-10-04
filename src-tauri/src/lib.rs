@@ -28,6 +28,7 @@ pub fn run() {
             commands::save_lists,
             commands::save_slots,
             commands::read_save,
+            commands::diagnostics,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

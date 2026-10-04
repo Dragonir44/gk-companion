@@ -30,6 +30,9 @@ pub struct GameData {
     pub game: GameId,
     /// Identifies the game files this was extracted from.
     pub fingerprint: String,
+    /// Steam build id of the game version extracted, when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub game_build: Option<String>,
     pub unity_version: String,
     pub items: Vec<Entity>,
     /// World objects: stations, buildings.
@@ -220,6 +223,7 @@ mod tests {
             model_version: MODEL_VERSION,
             game: GameId::Gk2,
             fingerprint: "fp".into(),
+            game_build: None,
             unity_version: "6000".into(),
             items: vec![Entity { id: "nails".into(), name: None, desc: None, heavy: false, icon: None }],
             objects: vec![],

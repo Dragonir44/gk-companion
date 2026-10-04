@@ -18,7 +18,9 @@ export function installMocks() {
       case "load_game": {
         const res = await fetch(`/.dev-data/${a.game}.json`);
         if (!res.ok) throw "game-not-found";
-        return { data: await res.json(), freshness: "cached", iconDir: "/.dev-data" };
+        // ?refreshing: show data as stale, being re-extracted.
+        const freshness = location.search.includes("refreshing") ? "refreshing" : "cached";
+        return { data: await res.json(), freshness, iconDir: "/.dev-data" };
       }
       case "load_lists":
         return lists;
@@ -26,6 +28,19 @@ export function installMocks() {
         lists = a.lists;
         return null;
       case "set_game_path":
+        return null;
+      case "plugin:app|version":
+        return "0.0.0-dev";
+      case "diagnostics":
+        return {
+          appVersion: "0.0.0-dev",
+          os: "Browser dev mode",
+          arch: "x86_64",
+          games: ["gk1", "gk2"].map((game) => ({ game, found: true, manual: false, buildId: "dev", saveDirs: 1 })),
+        };
+      case "plugin:opener|open_url":
+        console.info("open url:", a.url);
+        (window as unknown as { __GK_OPENED__?: unknown }).__GK_OPENED__ = a.url;
         return null;
       // Saves: .dev-data/<game>-save.json from `cargo run --example save -- <dat> <json>`.
       case "save_slots": {

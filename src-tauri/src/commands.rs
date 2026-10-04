@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 
 use crate::extract::{self, ExtractError};
 use crate::games::{self, Install};
@@ -36,6 +36,8 @@ pub enum Freshness {
     Cached,
     /// Cache from older game files: the game is missing or unreadable.
     Stale,
+    /// Cache from older game files, shown while re-extracting.
+    Refreshing,
 }
 
 #[derive(Debug, Serialize)]
@@ -100,7 +102,7 @@ fn read_cache(app: &AppHandle, game: GameId) -> Option<GameData> {
 
 fn install_for(settings: &Settings, game: GameId) -> (Option<Install>, bool) {
     match settings.game_paths.get(&game) {
-        Some(root) => (Some(Install { root: root.clone(), library: None }), true),
+        Some(root) => (Some(games::manual_install(root.clone(), game)), true),
         None => (games::find_steam_install(game), false),
     }
 }
@@ -131,62 +133,97 @@ fn load_game_blocking(app: &AppHandle, game: GameId) -> CmdResult<LoadResult> {
     let settings = load_settings(app)?;
     let cache = read_cache(app, game);
     let icon_dir = cache_dir(app)?;
-    let stale = |cache: GameData, warning: String| LoadResult {
-        data: cache,
-        freshness: Freshness::Stale,
-        warning: Some(warning),
+    let result = |data: GameData, freshness: Freshness, warning: Option<&str>| LoadResult {
+        data,
+        freshness,
+        warning: warning.map(str::to_string),
         icon_dir: icon_dir.clone(),
     };
 
     let Some(install) = install_for(&settings, game).0 else {
         return match cache {
-            Some(c) => Ok(stale(c, "game-not-found".into())),
+            Some(c) => Ok(result(c, Freshness::Stale, Some("game-not-found"))),
             None => Err("game-not-found".into()),
         };
     };
 
-    let fingerprint = extract::fingerprint(&install.root).ok();
-    if let (Some(c), Some(fp)) = (&cache, &fingerprint) {
-        if &c.fingerprint == fp {
-            let data = cache.unwrap();
-            return Ok(LoadResult { data, freshness: Freshness::Cached, warning: None, icon_dir });
+    let fingerprint = extract::fingerprint(&install.root, install.build_id.as_deref()).ok();
+    match cache {
+        Some(c) if fingerprint.as_ref() == Some(&c.fingerprint) => Ok(result(c, Freshness::Cached, None)),
+        // The game changed: show the previous data now, refresh behind it.
+        Some(c) => {
+            refresh_in_background(app.clone(), game, install);
+            Ok(result(c, Freshness::Refreshing, None))
         }
+        None => match extract_and_cache(app, game, &install) {
+            Ok(data) => Ok(result(data, Freshness::Extracted, None)),
+            Err((code, e)) => Err(format!("{code}: {e}")),
+        },
     }
+}
 
-    match extract::extract(game, &install.root) {
-        Ok(extracted) => {
-            let mut data = extracted.data;
-            if let Some(err) = extracted.icons_error {
-                eprintln!("icons of {}: {err}", game.as_str());
+/// Extracts a game and writes its cache (data + icon sheets).
+/// Errors carry a code for the frontend: `game-updated` or `extract-failed`.
+fn extract_and_cache(app: &AppHandle, game: GameId, install: &Install) -> Result<GameData, (&'static str, String)> {
+    let failed = |e: String| ("extract-failed", e);
+    let icon_dir = cache_dir(app).map_err(failed)?;
+    let extracted = extract::extract(game, &install.root, install.build_id.as_deref()).map_err(|e| {
+        eprintln!("extraction of {} failed: {e}", game.as_str());
+        let code = if matches!(e, ExtractError::Outdated(_)) { "game-updated" } else { "extract-failed" };
+        (code, e.to_string())
+    })?;
+    let mut data = extracted.data;
+    if let Some(err) = extracted.icons_error {
+        eprintln!("icons of {}: {err}", game.as_str());
+    }
+    if let Some(set) = extracted.icons {
+        // Sheets are named by fingerprint: an open webview never shows a
+        // stale image from its cache after a game update.
+        let prefix = format!("{}-icons-{:x}", game.as_str(), hash(&data.fingerprint));
+        match set.write_sheets(&icon_dir, &prefix) {
+            Ok(names) => {
+                // Only now: the sheets on screen stay valid until the switch.
+                remove_old_sheets(&icon_dir, game, &prefix);
+                data.icons.sheets = names;
             }
-            if let Some(set) = extracted.icons {
-                // Sheets are named by fingerprint: an open webview never
-                // shows a stale image from its cache after a game update.
-                let prefix = format!("{}-icons-{:x}", game.as_str(), hash(&data.fingerprint));
-                remove_old_sheets(&icon_dir, game);
-                match set.write_sheets(&icon_dir, &prefix) {
-                    Ok(names) => data.icons.sheets = names,
-                    Err(e) => {
-                        eprintln!("writing icons of {}: {e}", game.as_str());
-                        data.icons = Default::default();
-                    }
-                }
-            }
-            write_json(&cache_path(app, game)?, &data)?;
-            Ok(LoadResult { data, freshness: Freshness::Extracted, warning: None, icon_dir })
-        }
-        Err(e) => {
-            let code = match &e {
-                ExtractError::Outdated(_) => "game-updated",
-                _ => "extract-failed",
-            };
-            eprintln!("extraction of {} failed: {e}", game.as_str());
-            match cache {
-                Some(c) => Ok(stale(c, code.into())),
-                None => Err(format!("{code}: {e}")),
+            Err(e) => {
+                eprintln!("writing icons of {}: {e}", game.as_str());
+                data.icons = Default::default();
             }
         }
     }
+    write_json(&cache_path(app, game).map_err(failed)?, &data).map_err(failed)?;
+    Ok(data)
+}
+
+/// Games being re-extracted in the background, never twice at once.
+static REFRESHING: std::sync::Mutex<Vec<GameId>> = std::sync::Mutex::new(Vec::new());
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RefreshFailed {
+    game: GameId,
+    code: &'static str,
+}
+
+/// Re-extracts a game whose files changed, then emits `game-data-updated`
+/// (the frontend reloads it from the fresh cache) or `game-data-failed`.
+fn refresh_in_background(app: AppHandle, game: GameId, install: Install) {
+    {
+        let mut running = REFRESHING.lock().unwrap();
+        if running.contains(&game) {
+            return;
+        }
+        running.push(game);
+    }
+    std::thread::spawn(move || {
+        let outcome = extract_and_cache(&app, game, &install);
+        REFRESHING.lock().unwrap().retain(|g| *g != game);
+        let _ = match outcome {
+            Ok(_) => app.emit("game-data-updated", game),
+            Err((code, _)) => app.emit("game-data-failed", RefreshFailed { game, code }),
+        };
+    });
 }
 
 fn hash(s: &str) -> u64 {
@@ -196,10 +233,12 @@ fn hash(s: &str) -> u64 {
     h.finish()
 }
 
-fn remove_old_sheets(dir: &Path, game: GameId) {
+/// Removes a game's icon sheets except the current ones (`keep` prefix).
+fn remove_old_sheets(dir: &Path, game: GameId, keep: &str) {
     let prefix = format!("{}-icons-", game.as_str());
     for e in std::fs::read_dir(dir).into_iter().flatten().flatten() {
-        if e.file_name().to_string_lossy().starts_with(&prefix) {
+        let name = e.file_name().to_string_lossy().into_owned();
+        if name.starts_with(&prefix) && !name.starts_with(keep) {
             let _ = std::fs::remove_file(e.path());
         }
     }
@@ -211,7 +250,7 @@ pub fn set_game_path(app: AppHandle, game: GameId, path: Option<PathBuf>) -> Cmd
     let mut settings = load_settings(&app)?;
     match path {
         Some(p) => {
-            extract::fingerprint(&p).map_err(|_| "not-a-game-folder".to_string())?;
+            extract::fingerprint(&p, None).map_err(|_| "not-a-game-folder".to_string())?;
             settings.game_paths.insert(game, p);
         }
         None => {
@@ -270,4 +309,51 @@ pub async fn read_save(app: AppHandle, game: GameId, slot: String) -> CmdResult<
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GameDiagnostics {
+    pub game: GameId,
+    pub found: bool,
+    pub manual: bool,
+    pub build_id: Option<String>,
+    /// Steam, Proton prefix or not found: where saves are looked for.
+    pub save_dirs: usize,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Diagnostics {
+    pub app_version: String,
+    /// e.g. "CachyOS Linux Rolling [64-bit]".
+    pub os: String,
+    pub arch: &'static str,
+    pub games: Vec<GameDiagnostics>,
+}
+
+/// Environment summary pasted into bug reports. Paths are left out: they
+/// would show user names.
+#[tauri::command]
+pub fn diagnostics(app: AppHandle) -> CmdResult<Diagnostics> {
+    let settings = load_settings(&app)?;
+    let games = GameId::ALL
+        .into_iter()
+        .map(|game| {
+            let (install, manual) = install_for(&settings, game);
+            GameDiagnostics {
+                game,
+                found: install.is_some(),
+                manual,
+                build_id: install.as_ref().and_then(|i| i.build_id.clone()),
+                save_dirs: install.as_ref().map_or(0, |i| save::save_dirs(game, i).len()),
+            }
+        })
+        .collect();
+    Ok(Diagnostics {
+        app_version: app.package_info().version.to_string(),
+        os: os_info::get().to_string(),
+        arch: std::env::consts::ARCH,
+        games,
+    })
 }

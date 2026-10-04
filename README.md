@@ -23,6 +23,9 @@ Download from the [releases](https://github.com/Dragonir44/gk-companion/releases
 Updates are offered inside the app (AppImage, Windows, macOS; deb/rpm when
 signed packages are published) and installed in place.
 
+Found a bug or have an idea? Use **Report** in the app: it opens a GitHub
+issue form prefilled with the app version, OS and game builds.
+
 The game must be installed: the app finds it through Steam (or you pick its
 folder) and reads everything from there. It also follows your latest save.
 
@@ -37,7 +40,9 @@ folder) and reads everything from there. It also follows your latest save.
   layout hash: when a game update changes a layout, the app detects it, keeps
   its last good cache and asks for an app update.
 - `src-tauri/src/extract/` — turns each game's data into one shared model
-  (`model.rs`), cached per game and re-extracted when game files change.
+  (`model.rs`), cached per game. The cache is keyed by the game's Steam
+  build id (file sizes and dates otherwise); after a game update the old
+  data shows at once while the new one is extracted in the background.
 - `src-tauri/src/extract/icons.rs` — icons cut from the games' sprite
   atlases (gk1: resources.assets; gk2: Addressables bundles, found by
   scanning bundle metadata), written as sheet images next to the cache.

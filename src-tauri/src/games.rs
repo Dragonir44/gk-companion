@@ -23,6 +23,8 @@ pub struct Install {
     pub root: PathBuf,
     /// Steam library holding the game (for Proton prefixes); None if set manually.
     pub library: Option<PathBuf>,
+    /// Steam build id of the installed version, when Steam manages it.
+    pub build_id: Option<String>,
 }
 
 fn steam_roots() -> Vec<PathBuf> {
@@ -74,18 +76,32 @@ fn vdf_values(src: &str, key: &str) -> Vec<String> {
         .collect()
 }
 
-fn install_in_library(lib: &Path, game: GameId) -> Option<PathBuf> {
+/// Install root and Steam build id of a game in a library.
+fn install_in_library(lib: &Path, game: GameId) -> Option<(PathBuf, Option<String>)> {
     let manifest = lib.join(format!("steamapps/appmanifest_{}.acf", game.steam_app_id()));
     let acf = std::fs::read_to_string(manifest).ok()?;
     let dir = vdf_values(&acf, "installdir").into_iter().next()?;
+    let build = vdf_values(&acf, "buildid").into_iter().next().filter(|b| !b.is_empty() && b != "0");
     let root = lib.join("steamapps/common").join(dir);
-    root.is_dir().then_some(root)
+    root.is_dir().then_some((root, build))
 }
 
 pub fn find_steam_install(game: GameId) -> Option<Install> {
-    libraries()
+    libraries().into_iter().find_map(|lib| {
+        install_in_library(&lib, game).map(|(root, build_id)| Install { root, library: Some(lib), build_id })
+    })
+}
+
+/// A manually chosen folder: still Steam's if it is a library's install dir.
+pub fn manual_install(root: PathBuf, game: GameId) -> Install {
+    let same = |a: &Path, b: &Path| a.canonicalize().ok().zip(b.canonicalize().ok()).is_some_and(|(a, b)| a == b);
+    let steam = libraries()
         .into_iter()
-        .find_map(|lib| install_in_library(&lib, game).map(|root| Install { root, library: Some(lib) }))
+        .find_map(|lib| install_in_library(&lib, game).filter(|(r, _)| same(r, &root)).map(|(_, b)| (lib, b)));
+    match steam {
+        Some((lib, build_id)) => Install { root, library: Some(lib), build_id },
+        None => Install { root, library: None, build_id: None },
+    }
 }
 
 #[cfg(test)]

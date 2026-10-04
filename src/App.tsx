@@ -1,26 +1,37 @@
+import { getVersion } from "@tauri-apps/api/app";
 import { open } from "@tauri-apps/plugin-dialog";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { GameCtx } from "./components/ctx";
 import { ListPanel } from "./components/ListPanel";
+import { ReportMenu } from "./components/ReportMenu";
 import { ResearchTree } from "./components/ResearchTree";
 import { Results } from "./components/Results";
+import { SaveSelector } from "./components/SaveSelector";
 import { Search } from "./components/Search";
+import { UpdateBanner } from "./components/UpdateBanner";
 import { fmt, LANGUAGES, strings } from "./i18n";
 import { namer } from "./names";
 import { unlockedBy, unlocks } from "./progress";
-import { SaveSelector } from "./components/SaveSelector";
-import { UpdateBanner } from "./components/UpdateBanner";
 import { useStore } from "./store";
 import { GAMES } from "./types";
 import "./App.css";
 
 const SAVE_POLL_MS = 4000;
 
+function useAppVersion(): string | undefined {
+  const [version, setVersion] = useState<string>();
+  useEffect(() => {
+    getVersion().then(setVersion, () => {});
+  }, []);
+  return version;
+}
+
 export default function App() {
   const { ready, game, lang, games, statuses, view, saves } = useStore();
   const { init, selectGame, setLang, loadGame, setGamePath, setView, refreshSaves } = useStore.getState();
   const progress = saves[game]?.progress;
+  const appVersion = useAppVersion();
   const t = strings(lang);
   const g = games[game];
 
@@ -92,6 +103,7 @@ export default function App() {
           ))}
         </nav>
         <SaveSelector t={t} />
+        <ReportMenu t={t} />
         <label className="lang">
           <span className="sr-only">{t.language}</span>
           <select value={lang} onChange={(e) => setLang(e.target.value)}>
@@ -142,8 +154,22 @@ export default function App() {
             </main>
           )}
           <footer className="statusbar muted">
-            {g.result?.freshness === "extracted" ? t.extracted : t.cached} · {fmt(t.recipesCount, { n: ctx.idx.data.recipes.length })}
-            {status?.install && <span title={status.install.root}> · {status.install.root}</span>}
+            <span className="status-left">
+              {g.result?.freshness === "refreshing" ? (
+                <span className="refreshing">
+                  <span className="spinner" aria-hidden /> {t.refreshing}
+                </span>
+              ) : g.result?.freshness === "extracted" ? (
+                t.extracted
+              ) : (
+                t.cached
+              )}
+              {" · "}
+              {fmt(t.recipesCount, { n: ctx.idx.data.recipes.length })}
+              {ctx.idx.data.gameBuild && ` · ${fmt(t.gameBuild, { build: ctx.idx.data.gameBuild })}`}
+              {status?.install && <span title={status.install.root}> · {status.install.root}</span>}
+            </span>
+            {appVersion && <span className="app-version">GK Companion v{appVersion}</span>}
           </footer>
         </GameCtx.Provider>
       ) : null}

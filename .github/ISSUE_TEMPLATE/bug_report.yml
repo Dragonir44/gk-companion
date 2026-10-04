@@ -1,0 +1,29 @@
+name: Signaler un bug / Report a bug
+description: Quelque chose ne marche pas comme prévu. / Something doesn't work as expected.
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: Que s'est-il passé ? / What happened?
+      description: Décris le problème, et ce que tu attendais à la place. / Describe the problem and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Comment le reproduire ? / How to reproduce?
+      placeholder: |
+        1. Ouvrir GK2, onglet Recherche…
+        2. …
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostic (rempli par l'app) / Diagnostics (filled by the app)
+      description: Rempli automatiquement si tu passes par le bouton de l'app. / Filled automatically when opened from the app.
+      render: text
+  - type: markdown
+    attributes:
+      value: |
+        Une capture d'écran aide beaucoup : tu peux la coller dans le premier champ. / A screenshot helps a lot: paste it in the first field.

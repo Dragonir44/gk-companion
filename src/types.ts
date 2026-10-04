@@ -61,6 +61,8 @@ export interface GameData {
   modelVersion: number;
   game: GameId;
   fingerprint: string;
+  /** Steam build id of the extracted game version. */
+  gameBuild?: string;
   unityVersion: string;
   items: Entity[];
   objects: Entity[];
@@ -93,7 +95,7 @@ export interface GameStatus {
 
 export interface LoadResult {
   data: GameData;
-  freshness: "extracted" | "cached" | "stale";
+  freshness: "extracted" | "cached" | "stale" | "refreshing";
   warning?: string;
   iconDir: string;
 }
