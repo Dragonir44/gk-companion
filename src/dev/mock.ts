@@ -27,6 +27,17 @@ export function installMocks() {
         return null;
       case "set_game_path":
         return null;
+      // Saves: .dev-data/<game>-save.json from `cargo run --example save -- <dat> <json>`.
+      case "save_slots": {
+        const res = await fetch(`/.dev-data/${a.game}-save.json`);
+        const saved = res.ok ? await res.json().catch(() => null) : null;
+        return { supported: a.game === "gk2", slots: saved ? [saved.slot] : [] };
+      }
+      case "read_save": {
+        const res = await fetch(`/.dev-data/${a.game}-save.json`);
+        if (!res.ok) throw "save-not-found";
+        return (await res.json()).progress;
+      }
       default:
         throw `unmocked command ${cmd}`;
     }

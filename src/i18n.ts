@@ -67,6 +67,20 @@ const fr = {
   unlocks: "Débloque",
   addAll: "Tout ajouter à la liste",
   reputation: "réputation {value}",
+  save: "Sauvegarde",
+  latestSave: "Dernière sauvegarde",
+  noSave: "Sans sauvegarde",
+  day: "jour {n}",
+  justNow: "à l'instant",
+  minutesAgo: "il y a {n} min",
+  hoursAgo: "il y a {n} h",
+  saveError: "Lecture de la sauvegarde impossible",
+  locked: "Pas encore débloqué",
+  unlockedBy: "Débloqué par : {techs}",
+  onlyUnlocked: "Seulement ce que je peux faire",
+  remainingCost: "Reste à rechercher",
+  researched: "Recherchée",
+  researchable: "Recherchable maintenant",
 } as const;
 
 export type Strings = { [K in keyof typeof fr]: string };
@@ -137,6 +151,20 @@ const en: Strings = {
   unlocks: "Unlocks",
   addAll: "Add all to the list",
   reputation: "reputation {value}",
+  save: "Save",
+  latestSave: "Latest save",
+  noSave: "No save",
+  day: "day {n}",
+  justNow: "just now",
+  minutesAgo: "{n} min ago",
+  hoursAgo: "{n} h ago",
+  saveError: "Could not read the save",
+  locked: "Not unlocked yet",
+  unlockedBy: "Unlocked by: {techs}",
+  onlyUnlocked: "Only what I can make",
+  remainingCost: "Left to research",
+  researched: "Researched",
+  researchable: "Researchable now",
 };
 
 const UI: Record<string, Strings> = { fr, en };

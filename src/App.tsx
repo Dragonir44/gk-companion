@@ -8,13 +8,18 @@ import { Results } from "./components/Results";
 import { Search } from "./components/Search";
 import { fmt, LANGUAGES, strings } from "./i18n";
 import { namer } from "./names";
+import { unlockedBy, unlocks } from "./progress";
+import { SaveSelector } from "./components/SaveSelector";
 import { useStore } from "./store";
 import { GAMES } from "./types";
 import "./App.css";
 
+const SAVE_POLL_MS = 4000;
+
 export default function App() {
-  const { ready, game, lang, games, statuses, view } = useStore();
-  const { init, selectGame, setLang, loadGame, setGamePath, setView } = useStore.getState();
+  const { ready, game, lang, games, statuses, view, saves } = useStore();
+  const { init, selectGame, setLang, loadGame, setGamePath, setView, refreshSaves } = useStore.getState();
+  const progress = saves[game]?.progress;
   const t = strings(lang);
   const g = games[game];
 
@@ -22,10 +27,33 @@ export default function App() {
     void init();
   }, [init]);
 
+  // Follow the save: poll slot timestamps (cheap) and on window focus.
+  useEffect(() => {
+    if (!ready) return;
+    void refreshSaves(game);
+    const timer = setInterval(() => void refreshSaves(game), SAVE_POLL_MS);
+    const onFocus = () => void refreshSaves(game);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [ready, game, refreshSaves]);
+
+  const unlockers = useMemo(() => unlockedBy(g?.index?.data.techs ?? []), [g?.index]);
   const ctx = useMemo(() => {
     if (!g?.index) return null;
-    return { t, n: namer(g.index.data, lang, t.heavy), idx: g.index };
-  }, [g?.index, lang, t]);
+    const u = unlocks(progress, g.index.data.techs);
+    return {
+      t,
+      n: namer(g.index.data, lang, t.heavy),
+      idx: g.index,
+      u,
+      hasSave: !!progress,
+      available: u.recipeUnlocked,
+      unlockers,
+    };
+  }, [g?.index, lang, t, progress, unlockers]);
 
   const languages = Object.keys(g?.result?.data.locales ?? LANGUAGES).filter((l) => l in LANGUAGES);
   const status = statuses.find((s) => s.game === game);
@@ -62,6 +90,7 @@ export default function App() {
             </button>
           ))}
         </nav>
+        <SaveSelector t={t} />
         <label className="lang">
           <span className="sr-only">{t.language}</span>
           <select value={lang} onChange={(e) => setLang(e.target.value)}>

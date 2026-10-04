@@ -3,7 +3,7 @@ import { create } from "zustand";
 
 import { buildIndex, type Index } from "./calc";
 import { defaultLang } from "./i18n";
-import type { CraftList, GameId, GameStatus, ListsFile, LoadResult, View } from "./types";
+import type { CraftList, GameId, GameStatus, ListsFile, LoadResult, Progress, SaveSlot, SaveSlots, View } from "./types";
 
 interface GameState {
   status: "idle" | "loading" | "ready" | "error";
@@ -11,6 +11,17 @@ interface GameState {
   index?: Index;
   error?: string;
 }
+
+export interface SaveState {
+  supported: boolean;
+  slots: SaveSlot[];
+  /** Progress of the followed slot. */
+  progress?: Progress;
+  error?: string;
+}
+
+/** Follow no save. */
+export const NO_SAVE = "none";
 
 interface State {
   ready: boolean;
@@ -24,6 +35,9 @@ interface State {
   games: Partial<Record<GameId, GameState>>;
   lists: CraftList[];
   active: Partial<Record<GameId, string>>;
+  saves: Partial<Record<GameId, SaveState>>;
+  /** Followed save per game: slot id, NO_SAVE, or unset for the latest. */
+  saveChoice: Partial<Record<GameId, string>>;
 
   init(): Promise<void>;
   selectGame(game: GameId): void;
@@ -33,6 +47,8 @@ interface State {
   setShowHidden(v: boolean): void;
   setView(v: View): void;
   setShowSpoilers(v: boolean): void;
+  refreshSaves(game: GameId): Promise<void>;
+  setSaveChoice(game: GameId, choice: string | undefined): void;
 
   createList(name: string): void;
   selectList(id: string): void;
@@ -49,6 +65,7 @@ const newId = () => Math.random().toString(36).slice(2, 10) + Date.now().toStrin
 
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
 let initStarted = false;
+const refreshing = new Set<GameId>();
 
 export const useStore = create<State>((set, get) => {
   /** Persists lists and prefs, debounced: edits come in bursts (typing). */
@@ -60,7 +77,14 @@ export const useStore = create<State>((set, get) => {
         version: 1,
         lists: s.lists,
         active: s.active,
-        prefs: { lang: s.lang, game: s.game, showHidden: s.showHidden, view: s.view, showSpoilers: s.showSpoilers },
+        prefs: {
+          lang: s.lang,
+          game: s.game,
+          showHidden: s.showHidden,
+          view: s.view,
+          showSpoilers: s.showSpoilers,
+          saveChoice: s.saveChoice,
+        },
       };
       invoke("save_lists", { lists: file }).catch((e) => console.error("save_lists", e));
     }, 400);
@@ -98,6 +122,8 @@ export const useStore = create<State>((set, get) => {
     games: {},
     lists: [],
     active: {},
+    saves: {},
+    saveChoice: {},
 
     async init() {
       // StrictMode runs effects twice in dev.
@@ -119,6 +145,7 @@ export const useStore = create<State>((set, get) => {
         showHidden: prefs.showHidden ?? false,
         view: prefs.view ?? "planner",
         showSpoilers: prefs.showSpoilers ?? false,
+        saveChoice: prefs.saveChoice ?? {},
         lists: file?.lists ?? [],
         active: file?.active ?? {},
       });
@@ -167,6 +194,39 @@ export const useStore = create<State>((set, get) => {
     setShowSpoilers(showSpoilers) {
       set({ showSpoilers });
       persist();
+    },
+
+    async refreshSaves(game) {
+      if (refreshing.has(game)) return;
+      refreshing.add(game);
+      try {
+        const { supported, slots } = await invoke<SaveSlots>("save_slots", { game });
+        const choice = get().saveChoice[game];
+        // A followed slot that disappeared falls back to the latest.
+        const slot = choice === NO_SAVE ? undefined : (slots.find((s) => s.id === choice) ?? slots[0]);
+        const prev = get().saves[game];
+        let progress = slot && prev?.progress?.slot === slot.id ? prev.progress : undefined;
+        let error: string | undefined;
+        if (slot && (!progress || progress.modified !== slot.modified)) {
+          try {
+            progress = await invoke<Progress>("read_save", { game, slot: slot.id });
+          } catch (e) {
+            // Usually a save being written: keep what we had, retry next poll.
+            error = String(e);
+          }
+        }
+        set((s) => ({ saves: { ...s.saves, [game]: { supported, slots, progress, error } } }));
+      } catch (e) {
+        console.error("refreshSaves", e);
+      } finally {
+        refreshing.delete(game);
+      }
+    },
+
+    setSaveChoice(game, choice) {
+      set((s) => ({ saveChoice: { ...s.saveChoice, [game]: choice } }));
+      persist();
+      void get().refreshSaves(game);
     },
 
     createList(name) {

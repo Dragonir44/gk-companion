@@ -5,14 +5,18 @@ import { useActiveList, useStore } from "../store";
 import type { CraftList } from "../types";
 import { fmtNum, Points, useGame } from "./ctx";
 import { Icon } from "./Icon";
+import { LockBadge } from "./Search";
 
 type Tab = "materials" | "steps" | "tree";
 
 export function Results() {
-  const { t, idx } = useGame();
+  const { t, idx, available } = useGame();
   const list = useActiveList();
   const [tab, setTab] = useState<Tab>("materials");
-  const p = useMemo(() => (list ? plan(idx, list.entries, list.choices, list.have) : undefined), [idx, list]);
+  const p = useMemo(
+    () => (list ? plan(idx, list.entries, list.choices, list.have, available) : undefined),
+    [idx, list, available],
+  );
 
   if (!list || !p || !list.entries.length) return <section className="panel results-panel" />;
 
@@ -142,6 +146,7 @@ function Steps({ p, list }: { p: Plan; list: CraftList }) {
           <span className="qty">{s.crafts}×</span>
           <span className="item">
             <Icon sprite={n.icon(s.item!)} size={24} />
+            <LockBadge r={s.recipe} />
             <strong>{n.name(s.item!)}</strong>
             {s.recipe.outputs.find((o) => o.item === s.item)!.count > 1 && (
               <span className="muted"> (×{s.recipe.outputs.find((o) => o.item === s.item)!.count})</span>
@@ -161,7 +166,7 @@ function Steps({ p, list }: { p: Plan; list: CraftList }) {
 }
 
 function Tree({ list }: { list: CraftList }) {
-  const { n, idx } = useGame();
+  const { n, idx, available } = useGame();
   return (
     <div className="tab-body tree">
       {list.entries.map((e) => {
@@ -173,7 +178,7 @@ function Tree({ list }: { list: CraftList }) {
               <span className="qty">{e.count}×</span> <Icon sprite={n.recipeIcon(r)} size={24} /> <strong>{n.recipe(r)}</strong>
             </summary>
             <ul>
-              {tree(idx, r, e.count, list.choices).map((node, i) => (
+              {tree(idx, r, e.count, list.choices, available).map((node, i) => (
                 <TreeItem key={i} node={node} />
               ))}
             </ul>
@@ -216,19 +221,19 @@ function TreeItem({ node }: { node: TreeNode }) {
 
 /** Chooses how an item is obtained: one of its recipes, or gathered raw. */
 function ItemChoice({ item, compact }: { item: string; compact?: boolean }) {
-  const { t, n, idx } = useGame();
+  const { t, n, idx, available, hasSave } = useGame();
   const list = useActiveList();
   const setChoice = useStore((s) => s.setChoice);
   const producers = idx.producers.get(item) ?? [];
   if (!producers.length || !list) return null;
-  const current = chosenRecipe(idx, item, list.choices)?.id ?? RAW;
+  const current = chosenRecipe(idx, item, list.choices, available)?.id ?? RAW;
   const label = (r: (typeof producers)[number]) =>
     [n.station(r) ?? t.anywhere, isProduction(r) ? `(${t.production})` : "", r.inputs.map((i) => `${i.count} ${n.name(i.item)}`).join(" + ")]
       .filter(Boolean)
       .join(" ");
 
   // The default needs no stored choice; storing it would pin it forever.
-  const fallback = chosenRecipe(idx, item, {})?.id ?? RAW;
+  const fallback = chosenRecipe(idx, item, {}, available)?.id ?? RAW;
   return (
     <select
       className={compact ? "choice compact" : "choice"}
@@ -238,6 +243,7 @@ function ItemChoice({ item, compact }: { item: string; compact?: boolean }) {
       <option value={RAW}>{t.gatherIt}</option>
       {producers.map((r) => (
         <option key={r.id} value={r.id}>
+          {hasSave && !available(r) ? "🔒 " : ""}
           {t.craftIt}: {label(r)}
         </option>
       ))}

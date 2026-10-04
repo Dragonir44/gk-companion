@@ -105,6 +105,18 @@ describe("productions", () => {
   });
 });
 
+describe("available recipes", () => {
+  it("are preferred by default when the save says what is unlocked", () => {
+    const g = game([...basic.recipes, r("nails_cheap", [["ingot", 1]], [["nails", 8]])]);
+    const idx = buildIndex(g);
+    // nails_cheap is the cheapest, but locked: the unlocked one is used.
+    const locked = new Set(["nails_cheap"]);
+    const p = plan(idx, [{ recipe: "crate", count: 1 }], {}, {}, (x) => !locked.has(x.id));
+    expect(p.steps.map((s) => s.recipe.id)).toContain("nails");
+    expect(plan(idx, [{ recipe: "crate", count: 1 }]).steps.map((s) => s.recipe.id)).toContain("nails_cheap");
+  });
+});
+
 describe("tree", () => {
   it("expands each branch with its own rounding", () => {
     const nodes = tree(buildIndex(basic), basic.recipes[2], 1);

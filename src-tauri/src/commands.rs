@@ -9,6 +9,7 @@ use tauri::{AppHandle, Manager};
 use crate::extract::{self, ExtractError};
 use crate::games::{self, Install};
 use crate::model::{GameData, GameId, MODEL_VERSION};
+use crate::save::{self, Progress, SaveSlot};
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -229,4 +230,40 @@ pub fn load_lists(app: AppHandle) -> CmdResult<serde_json::Value> {
 #[tauri::command]
 pub fn save_lists(app: AppHandle, lists: serde_json::Value) -> CmdResult<()> {
     write_json(&lists_path(&app)?, &lists)
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveSlots {
+    /// Whether this app can read the game's saves at all.
+    pub supported: bool,
+    pub slots: Vec<SaveSlot>,
+}
+
+fn slots_for(app: &AppHandle, game: GameId) -> CmdResult<Vec<SaveSlot>> {
+    let settings = load_settings(app)?;
+    let Some(install) = install_for(&settings, game).0 else { return Ok(vec![]) };
+    Ok(save::list_slots(&save::save_dirs(game, &install)))
+}
+
+/// Save slots, most recent first. Cheap (file metadata only): polled.
+#[tauri::command]
+pub async fn save_slots(app: AppHandle, game: GameId) -> CmdResult<SaveSlots> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let supported = save::supported(game);
+        let slots = if supported { slots_for(&app, game)? } else { vec![] };
+        Ok(SaveSlots { supported, slots })
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn read_save(app: AppHandle, game: GameId, slot: String) -> CmdResult<Progress> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let s = slots_for(&app, game)?.into_iter().find(|s| s.id == slot).ok_or("save-not-found")?;
+        save::read_progress(game, &s).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }

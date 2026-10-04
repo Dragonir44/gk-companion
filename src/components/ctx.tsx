@@ -1,6 +1,8 @@
 import { createContext, useContext } from "react";
 
-import type { Index } from "../calc";
+import type { Available, Index } from "../calc";
+import type { Unlocks } from "../progress";
+import type { Tech } from "../types";
 import type { Strings } from "../i18n";
 import type { Namer } from "../names";
 
@@ -8,6 +10,14 @@ export interface Ctx {
   t: Strings;
   n: Namer;
   idx: Index;
+  /** Player progress from the followed save (or defaults without one). */
+  u: Unlocks;
+  /** Whether a save is followed: progress marks are meaningful. */
+  hasSave: boolean;
+  /** Recipe filter for the planner: unlocked ones when a save is followed. */
+  available: Available;
+  /** Recipe id -> techs unlocking it. */
+  unlockers: Map<string, Tech[]>;
 }
 
 export const GameCtx = createContext<Ctx | null>(null);

@@ -48,18 +48,29 @@ export function buildIndex(data: GameData): Index {
 /** Makes items from nothing: automated gathering, not a craft to plan. */
 export const isProduction = (r: Recipe) => r.inputs.length === 0;
 
+/** Whether the player can use a recipe (from their save); all by default. */
+export type Available = (r: Recipe) => boolean;
+const ALL: Available = () => true;
+
 /**
  * Recipe used to make `item`, or undefined when it is gathered raw.
- * Productions are only used when chosen explicitly.
+ * Productions are only used when chosen explicitly; recipes the player
+ * has unlocked are preferred.
  */
-export function chosenRecipe(idx: Index, item: string, choices: Record<string, string>): Recipe | undefined {
+export function chosenRecipe(
+  idx: Index,
+  item: string,
+  choices: Record<string, string>,
+  available: Available = ALL,
+): Recipe | undefined {
   const c = choices[item];
   if (c === RAW) return undefined;
   if (c) {
     const r = idx.recipes.get(c);
     if (r && yieldOf(r, item) > 0) return r;
   }
-  return idx.producers.get(item)?.find((r) => !isProduction(r));
+  const crafts = idx.producers.get(item)?.filter((r) => !isProduction(r)) ?? [];
+  return crafts.find(available) ?? crafts[0];
 }
 
 export interface Step {
@@ -96,6 +107,7 @@ export function plan(
   entries: ListEntry[],
   choices: Record<string, string> = {},
   have: Record<string, number> = {},
+  available: Available = ALL,
 ): Plan {
   const p: Plan = {
     raw: new Map(),
@@ -113,7 +125,7 @@ export function plan(
   //    stack closes a cycle: it is then treated as raw.
   const order: string[] = [];
   const state = new Map<string, "open" | "done">();
-  const recipeOf = (item: string) => (p.cycles.has(item) ? undefined : chosenRecipe(idx, item, choices));
+  const recipeOf = (item: string) => (p.cycles.has(item) ? undefined : chosenRecipe(idx, item, choices, available));
   const visit = (s: Stack) => {
     if (s.group) return;
     const st = state.get(s.item);
@@ -185,11 +197,17 @@ export interface TreeNode {
 const MAX_DEPTH = 16;
 
 /** Unaggregated tree of a recipe: each branch rounds its own crafts. */
-export function tree(idx: Index, recipe: Recipe, crafts: number, choices: Record<string, string> = {}): TreeNode[] {
+export function tree(
+  idx: Index,
+  recipe: Recipe,
+  crafts: number,
+  choices: Record<string, string> = {},
+  available: Available = ALL,
+): TreeNode[] {
   const expand = (s: Stack, qty: number, path: Set<string>): TreeNode => {
     if (s.group) return { item: s.item, qty, group: true, children: [] };
     if (path.has(s.item) || path.size > MAX_DEPTH) return { item: s.item, qty, cycle: true, children: [] };
-    const r = chosenRecipe(idx, s.item, choices);
+    const r = chosenRecipe(idx, s.item, choices, available);
     if (!r) return { item: s.item, qty, children: [] };
     const c = craftsFor(qty, yieldOf(r, s.item));
     const next = new Set(path).add(s.item);

@@ -2,6 +2,7 @@ mod commands;
 pub mod extract;
 pub mod games;
 pub mod model;
+pub mod save;
 pub mod unity;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -15,6 +16,8 @@ pub fn run() {
             commands::set_game_path,
             commands::load_lists,
             commands::save_lists,
+            commands::save_slots,
+            commands::read_save,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

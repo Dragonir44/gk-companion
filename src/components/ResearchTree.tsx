@@ -31,7 +31,7 @@ function addCost(into: Record<string, number>, cost: Record<string, number>) {
 }
 
 export function ResearchTree() {
-  const { t, n, idx } = useGame();
+  const { t, n, idx, u, hasSave } = useGame();
   const showSpoilers = useStore((s) => s.showSpoilers);
   const setShowSpoilers = useStore((s) => s.setShowSpoilers);
   const { techs, branches } = idx.data;
@@ -40,7 +40,7 @@ export function ResearchTree() {
   const [selected, setSelected] = useState<string | null>(null);
   const scrollRef = useDragScroll<HTMLDivElement>();
 
-  const visible = (x: Tech) => showSpoilers || !x.hidden;
+  const visible = (x: Tech) => showSpoilers || !u.techHidden(x);
   const label = (x: Tech) => {
     if (!visible(x)) return "???";
     if (x.lock) return `🔒 ${n.text(x.lock.name) ?? x.lock.npc} — ${fmt(t.reputation, { value: x.lock.value })}`;
@@ -117,12 +117,16 @@ export function ResearchTree() {
             </svg>
             {inBranch.map((x) => {
               const external = x.parents.filter((p) => byId.get(p)?.branch !== branch);
-              const cls = ["tech", x.lock ? "lock" : "", x.id === selected ? "selected" : path.has(x.id) ? "on-path" : "", visible(x) ? "" : "secret"];
+              const state = hasSave ? u.techState(x) : undefined;
+              const cls = ["tech", state ? `st-${state}` : "", x.lock ? "lock" : "", x.id === selected ? "selected" : path.has(x.id) ? "on-path" : "", visible(x) ? "" : "secret"];
               return (
                 <button key={x.id} className={cls.join(" ")} style={pos(x)} onClick={() => select(x.id)}>
                   {visible(x) && <Icon sprite={techIcon(x)} size={x.lock ? 40 : 28} />}
                   <span className="tech-body">
-                    <span className="tech-name">{label(x)}</span>
+                    <span className="tech-name">
+                      {state === "unlocked" && <span className="done-mark">✓ </span>}
+                      {label(x)}
+                    </span>
                     <Points points={x.cost} />
                   </span>
                   {external.length > 0 && (
@@ -151,13 +155,16 @@ function TechDetails(props: {
   onSelect: (id: string) => void;
 }) {
   const { tech, path, byId, label, visible, branchName, onSelect } = props;
-  const { t, n, idx } = useGame();
+  const { t, n, idx, u, hasSave } = useGame();
   const addEntry = useStore((s) => s.addEntry);
 
   if (!tech) return <section className="panel tech-details muted center-text">{t.selectTech}</section>;
 
+  // With a save, only what is left to research counts.
+  const todo = [...path].map((id) => byId.get(id)).filter((x): x is Tech => !!x && (!hasSave || u.techState(x) !== "unlocked"));
   const total: Record<string, number> = {};
-  for (const id of path) addCost(total, byId.get(id)?.cost ?? {});
+  for (const x of todo) addCost(total, x.cost);
+  const state = hasSave ? u.techState(tech) : undefined;
   const recipes = visible(tech) ? tech.unlocks.map((u) => idx.recipes.get(u)).filter((r) => r !== undefined) : [];
   const desc = visible(tech) ? n.desc(tech.id) : undefined;
 
@@ -167,7 +174,11 @@ function TechDetails(props: {
         {visible(tech) && tech.lock?.portrait && <Icon sprite={tech.lock.portrait} size={64} />}
         {label(tech)}
       </h2>
-      <p className="muted small">{branchName(tech.branch)}</p>
+      <p className="muted small">
+        {branchName(tech.branch)}
+        {state === "unlocked" && <span className="state-pill done"> {t.researched}</span>}
+        {state === "available" && <span className="state-pill ready"> {t.researchable}</span>}
+      </p>
       {desc && <p className="desc">{desc}</p>}
 
       {Object.keys(tech.cost).length > 0 && (
@@ -176,11 +187,11 @@ function TechDetails(props: {
           <Points points={tech.cost} />
         </>
       )}
-      {path.size > 1 && (
+      {todo.length > 0 && (hasSave || path.size > 1) && (
         <>
-          <h3>{t.totalCost}</h3>
+          <h3>{hasSave ? t.remainingCost : t.totalCost}</h3>
           <Points points={total} />
-          <span className="muted small"> ({path.size} {t.techs})</span>
+          <span className="muted small"> ({todo.length} {t.techs})</span>
         </>
       )}
 

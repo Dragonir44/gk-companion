@@ -122,5 +122,37 @@ export interface ListsFile {
   version: 1;
   lists: CraftList[];
   active: Partial<Record<GameId, string>>;
-  prefs: { lang?: string; game?: GameId; showHidden?: boolean; view?: View; showSpoilers?: boolean };
+  prefs: {
+    lang?: string;
+    game?: GameId;
+    showHidden?: boolean;
+    view?: View;
+    showSpoilers?: boolean;
+    saveChoice?: Partial<Record<GameId, string>>;
+  };
 }
+
+// --- Save progress -----------------------------------------------------------
+
+export interface SaveSlot {
+  id: string;
+  path: string;
+  /** ms since epoch; changes on every save. */
+  modified: number;
+  info?: { day?: number; isAutoSave?: boolean; saveDateTime?: string } | null;
+}
+
+export interface SaveSlots {
+  supported: boolean;
+  slots: SaveSlot[];
+}
+
+export interface Progress {
+  slot: string;
+  modified: number;
+  /** knowledgeSystem lists: unlockedTechs, revealedTechs, hiddenTechs, unlockedCrafts... */
+  lists: Record<string, string[]>;
+}
+
+/** Which save to follow: a slot id, "none", or undefined for the latest. */
+export type SaveChoice = string | undefined;

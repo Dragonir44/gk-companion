@@ -1,5 +1,6 @@
 import { useDeferredValue, useMemo, useState } from "react";
 
+import { fmt } from "../i18n";
 import { useStore } from "../store";
 import type { Recipe } from "../types";
 import { Points, useGame } from "./ctx";
@@ -11,7 +12,8 @@ const MAX_RESULTS = 120;
 const fold = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
 export function Search() {
-  const { t, n, idx } = useGame();
+  const { t, n, idx, u, hasSave } = useGame();
+  const [onlyUnlocked, setOnlyUnlocked] = useState(false);
   const showHidden = useStore((s) => s.showHidden);
   const setShowHidden = useStore((s) => s.setShowHidden);
   const addEntry = useStore((s) => s.addEntry);
@@ -23,6 +25,7 @@ export function Search() {
     const visible = idx.data.recipes.filter(
       (r) =>
         (showHidden || !r.hidden) &&
+        (!hasSave || !onlyUnlocked || u.recipeUnlocked(r)) &&
         (r.kind === "building" ? r.builds : r.outputs.length > 0 || (r.inputs.length > 0 && r.stations.length > 0)),
     );
     return visible.map((r) => ({
@@ -30,7 +33,7 @@ export function Search() {
       label: n.recipe(r),
       text: fold([n.recipe(r), ...r.outputs.map((o) => n.name(o.item)), ...r.stations.map(n.name), r.id].join(" ")),
     }));
-  }, [idx, n, showHidden]);
+  }, [idx, n, showHidden, hasSave, onlyUnlocked, u]);
 
   const results = useMemo(() => {
     const words = fold(q).split(/\s+/).filter(Boolean);
@@ -61,6 +64,12 @@ export function Search() {
         <input type="checkbox" checked={showHidden} onChange={(e) => setShowHidden(e.target.checked)} />
         {t.showHidden}
       </label>
+      {hasSave && (
+        <label className="toggle">
+          <input type="checkbox" checked={onlyUnlocked} onChange={(e) => setOnlyUnlocked(e.target.checked)} />
+          {t.onlyUnlocked}
+        </label>
+      )}
       <ul className="results">
         {q && !results.length && <li className="muted">{t.noResults}</li>}
         {results.map(({ r, label }) => (
@@ -76,6 +85,18 @@ export function Search() {
   );
 }
 
+/** Lock badge for recipes the followed save hasn't unlocked yet. */
+export function LockBadge({ r }: { r: Recipe }) {
+  const { t, n, u, hasSave, unlockers } = useGame();
+  if (!hasSave || u.recipeUnlocked(r)) return null;
+  const techs = (unlockers.get(r.id) ?? []).map((x) => n.name(x.id));
+  return (
+    <span className="lock-badge" title={techs.length ? fmt(t.unlockedBy, { techs: techs.join(", ") }) : t.locked}>
+      🔒
+    </span>
+  );
+}
+
 export function RecipeLine({ r, label }: { r: Recipe; label?: string }) {
   const { t, n } = useGame();
   const out = r.outputs[0];
@@ -85,6 +106,7 @@ export function RecipeLine({ r, label }: { r: Recipe; label?: string }) {
       <Icon sprite={n.recipeIcon(r)} size={32} />
       <span className="recipe-line">
       <span className="recipe-name">
+        <LockBadge r={r} />
         {label ?? n.recipe(r)}
         {out && out.count > 1 && <span className="muted"> ×{out.count}</span>}
         {r.kind === "building" && <span className="badge">{t.building}</span>}

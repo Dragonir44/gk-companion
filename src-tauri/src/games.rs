@@ -49,7 +49,7 @@ fn steam_roots() -> Vec<PathBuf> {
 }
 
 /// Library paths listed in `libraryfolders.vdf` (plus the root itself).
-fn libraries() -> Vec<PathBuf> {
+pub fn libraries() -> Vec<PathBuf> {
     let mut libs = Vec::new();
     for root in steam_roots() {
         libs.push(root.clone());
