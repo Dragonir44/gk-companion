@@ -56,6 +56,17 @@ const fr = {
   stepsEmpty: "Aucune étape intermédiaire.",
   heavy: "lourd",
   world: "Décor",
+  planner: "Planificateur",
+  research: "Recherche",
+  showSpoilers: "Afficher les technos cachées (spoilers)",
+  selectTech: "Sélectionne une techno pour voir ce qu'elle débloque.",
+  cost: "Coût",
+  totalCost: "Coût total pour y arriver",
+  techs: "technos",
+  prerequisites: "Prérequis",
+  unlocks: "Débloque",
+  addAll: "Tout ajouter à la liste",
+  reputation: "réputation {value}",
 } as const;
 
 export type Strings = { [K in keyof typeof fr]: string };
@@ -115,6 +126,17 @@ const en: Strings = {
   stepsEmpty: "No intermediate steps.",
   heavy: "heavy",
   world: "World",
+  planner: "Planner",
+  research: "Research",
+  showSpoilers: "Show hidden techs (spoilers)",
+  selectTech: "Select a tech to see what it unlocks.",
+  cost: "Cost",
+  totalCost: "Total cost to get there",
+  techs: "techs",
+  prerequisites: "Prerequisites",
+  unlocks: "Unlocks",
+  addAll: "Add all to the list",
+  reputation: "reputation {value}",
 };
 
 const UI: Record<string, Strings> = { fr, en };

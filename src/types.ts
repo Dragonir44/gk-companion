@@ -1,6 +1,7 @@
 // Mirrors src-tauri/src/model.rs.
 
 export type GameId = "gk1" | "gk2";
+export type View = "planner" | "research";
 export const GAMES: GameId[] = ["gk1", "gk2"];
 
 export interface Entity {
@@ -46,6 +47,14 @@ export interface Tech {
   cost: Record<string, number>;
   unlocks: string[];
   hidden: boolean;
+  icon?: string;
+  /** Reputation gate rather than a research (gk2). */
+  lock?: { npc: string; name?: string; value: number };
+}
+
+export interface Branch {
+  id: number;
+  name?: string;
 }
 
 export interface GameData {
@@ -58,6 +67,7 @@ export interface GameData {
   groups: Record<string, string[]>;
   recipes: Recipe[];
   techs: Tech[];
+  branches: Branch[];
   locales: Record<string, Record<string, string>>;
   icons: IconIndex;
 }
@@ -112,5 +122,5 @@ export interface ListsFile {
   version: 1;
   lists: CraftList[];
   active: Partial<Record<GameId, string>>;
-  prefs: { lang?: string; game?: GameId; showHidden?: boolean };
+  prefs: { lang?: string; game?: GameId; showHidden?: boolean; view?: View; showSpoilers?: boolean };
 }

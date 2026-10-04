@@ -3,6 +3,7 @@ import { useEffect, useMemo } from "react";
 
 import { GameCtx } from "./components/ctx";
 import { ListPanel } from "./components/ListPanel";
+import { ResearchTree } from "./components/ResearchTree";
 import { Results } from "./components/Results";
 import { Search } from "./components/Search";
 import { fmt, LANGUAGES, strings } from "./i18n";
@@ -12,8 +13,8 @@ import { GAMES } from "./types";
 import "./App.css";
 
 export default function App() {
-  const { ready, game, lang, games, statuses } = useStore();
-  const { init, selectGame, setLang, loadGame, setGamePath } = useStore.getState();
+  const { ready, game, lang, games, statuses, view } = useStore();
+  const { init, selectGame, setLang, loadGame, setGamePath, setView } = useStore.getState();
   const t = strings(lang);
   const g = games[game];
 
@@ -54,6 +55,13 @@ export default function App() {
             </button>
           ))}
         </nav>
+        <nav className="views">
+          {(["planner", "research"] as const).map((v) => (
+            <button key={v} className={v === view ? "active" : ""} onClick={() => setView(v)}>
+              {t[v]}
+            </button>
+          ))}
+        </nav>
         <label className="lang">
           <span className="sr-only">{t.language}</span>
           <select value={lang} onChange={(e) => setLang(e.target.value)}>
@@ -90,11 +98,17 @@ export default function App() {
         </main>
       ) : ctx ? (
         <GameCtx.Provider value={ctx}>
-          <main className="layout">
-            <Search />
-            <ListPanel />
-            <Results />
-          </main>
+          {view === "research" ? (
+            <main className="layout-research">
+              <ResearchTree />
+            </main>
+          ) : (
+            <main className="layout">
+              <Search />
+              <ListPanel />
+              <Results />
+            </main>
+          )}
           <footer className="statusbar muted">
             {g.result?.freshness === "extracted" ? t.extracted : t.cached} · {fmt(t.recipesCount, { n: ctx.idx.data.recipes.length })}
             {status?.install && <span title={status.install.root}> · {status.install.root}</span>}

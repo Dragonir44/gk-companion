@@ -5,11 +5,15 @@ use std::collections::BTreeMap;
 use serde_json::Value;
 
 use super::{entity, expr, item_entity, flag, list, num, referenced_objects, text, Names, Normalized};
-use crate::model::{Recipe, RecipeKind, Stack, Tech};
+use crate::model::{Recipe, RecipeKind, ReputationLock, Stack, Tech};
 
 /// `BuildingDef.buildingMode` for removal entries (`*_r`), not constructions.
 const BUILDING_MODE_REMOVE: i64 = 2;
 const PURE_VALUE_FLOAT: i64 = 1;
+/// `TechDef.techDefType` of reputation gates (`lock_npc_*`).
+const TECH_TYPE_REPUTATION_LOCK: i64 = 1;
+/// `TechTreeTab` enum, in value order; names are `tech_tab_<name>` texts.
+const TECH_TABS: [&str; 6] = ["Building", "Metallurgy", "Farming", "Theology", "Anatomy", "Cooking"];
 
 /// Expression fields: a constant float, or a formula string.
 fn value(v: Option<&Value>) -> Option<f64> {
@@ -53,6 +57,12 @@ fn outputs(v: Option<&Value>) -> Vec<Stack> {
             expr: formula(i.get("count")),
         })
         .collect()
+}
+
+fn reputation_lock(t: &Value, names: &mut Names) -> Option<ReputationLock> {
+    let rv = t.get("wgoRepLock").map(|l| list(l, "resValues")).unwrap_or(&[]).first()?;
+    let npc = text(rv, "type").to_string();
+    Some(ReputationLock { name: names.exact(&npc), value: num(rv, "value"), npc })
 }
 
 fn points(c: &Value) -> BTreeMap<String, f64> {
@@ -106,7 +116,7 @@ pub fn normalize(b: &Value, names: &mut Names) -> Normalized {
         });
     }
 
-    let techs = list(b, "techDefs")
+    let techs: Vec<Tech> = list(b, "techDefs")
         .iter()
         .map(|t| {
             let id = text(t, "id");
@@ -129,6 +139,10 @@ pub fn normalize(b: &Value, names: &mut Names) -> Normalized {
                 cost,
                 unlocks,
                 hidden: flag(t, "hiddenAtStart"),
+                icon: super::opt_text(t, "customIconId"),
+                lock: (t.get("techDefType").and_then(Value::as_i64) == Some(TECH_TYPE_REPUTATION_LOCK))
+                    .then(|| reputation_lock(t, names))
+                    .flatten(),
             }
         })
         .collect();
@@ -151,5 +165,13 @@ pub fn normalize(b: &Value, names: &mut Names) -> Normalized {
         .filter_map(|w| Some((text(w, "id").to_string(), super::opt_text(w, "craftIconId")?)))
         .collect();
 
-    Normalized { items, objects, groups, recipes, techs, object_icons }
+    let mut tabs: Vec<i64> = techs.iter().map(|t| t.branch).collect();
+    tabs.sort_unstable();
+    tabs.dedup();
+    let branches = tabs
+        .into_iter()
+        .map(|id| (id, TECH_TABS.get(id as usize).map(|n| format!("tech_tab_{n}")).unwrap_or_default()))
+        .collect();
+
+    Normalized { items, objects, groups, recipes, techs, branches, object_icons }
 }

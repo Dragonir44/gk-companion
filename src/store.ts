@@ -3,7 +3,7 @@ import { create } from "zustand";
 
 import { buildIndex, type Index } from "./calc";
 import { defaultLang } from "./i18n";
-import type { CraftList, GameId, GameStatus, ListsFile, LoadResult } from "./types";
+import type { CraftList, GameId, GameStatus, ListsFile, LoadResult, View } from "./types";
 
 interface GameState {
   status: "idle" | "loading" | "ready" | "error";
@@ -17,6 +17,9 @@ interface State {
   game: GameId;
   lang: string;
   showHidden: boolean;
+  view: View;
+  /** Show techs the game keeps hidden until revealed. */
+  showSpoilers: boolean;
   statuses: GameStatus[];
   games: Partial<Record<GameId, GameState>>;
   lists: CraftList[];
@@ -28,6 +31,8 @@ interface State {
   setGamePath(game: GameId, path: string | null): Promise<void>;
   setLang(lang: string): void;
   setShowHidden(v: boolean): void;
+  setView(v: View): void;
+  setShowSpoilers(v: boolean): void;
 
   createList(name: string): void;
   selectList(id: string): void;
@@ -55,7 +60,7 @@ export const useStore = create<State>((set, get) => {
         version: 1,
         lists: s.lists,
         active: s.active,
-        prefs: { lang: s.lang, game: s.game, showHidden: s.showHidden },
+        prefs: { lang: s.lang, game: s.game, showHidden: s.showHidden, view: s.view, showSpoilers: s.showSpoilers },
       };
       invoke("save_lists", { lists: file }).catch((e) => console.error("save_lists", e));
     }, 400);
@@ -87,6 +92,8 @@ export const useStore = create<State>((set, get) => {
     game: "gk1",
     lang: defaultLang(),
     showHidden: false,
+    view: "planner",
+    showSpoilers: false,
     statuses: [],
     games: {},
     lists: [],
@@ -110,6 +117,8 @@ export const useStore = create<State>((set, get) => {
         game,
         lang: prefs.lang ?? get().lang,
         showHidden: prefs.showHidden ?? false,
+        view: prefs.view ?? "planner",
+        showSpoilers: prefs.showSpoilers ?? false,
         lists: file?.lists ?? [],
         active: file?.active ?? {},
       });
@@ -147,6 +156,16 @@ export const useStore = create<State>((set, get) => {
 
     setShowHidden(showHidden) {
       set({ showHidden });
+      persist();
+    },
+
+    setView(view) {
+      set({ view });
+      persist();
+    },
+
+    setShowSpoilers(showSpoilers) {
+      set({ showSpoilers });
       persist();
     },
 

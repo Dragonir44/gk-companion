@@ -2,7 +2,8 @@
 
 Crafting planner for **Graveyard Keeper** and **Graveyard Keeper 2**: pick what
 you want to make, get the raw materials to gather, the crafts to run in order,
-and the full crafting tree. Lists are saved locally.
+and the full crafting tree. Lists are saved locally. A research tree view shows
+what each tech costs, needs and unlocks, with hidden techs kept spoiler-free.
 
 The app ships **no game content**. On launch it reads recipes, techs and texts
 (11 languages) straight from your own install, so it stays in sync with game
@@ -55,7 +56,6 @@ python tools/schema-gen/gen_schema.py gk2 "/path/to/Graveyard Keeper 2"
 
 ## Roadmap
 
-- Research tree view
 - Reading the save to show unlocked techs and recipes (no spoilers):
   GK2 first (Odin binary, `unlockedTechs`), then GK1 (custom compressed format)
 - Generating schemas at runtime from the game DLLs, so layout changes need no app update

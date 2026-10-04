@@ -129,6 +129,8 @@ pub fn normalize(b: &Value, names: &mut Names) -> Normalized {
                 // Some entries carry an `@` prefix before the craft id.
                 unlocks: super::strings(t, &["crafts"]).into_iter().map(|c| c.trim_start_matches('@').to_string()).collect(),
                 hidden: flag(t, "hidden") || flag(t, "invisible"),
+                icon: super::opt_text(t, "icon"),
+                lock: None,
             }
         })
         .collect();
@@ -136,5 +138,12 @@ pub fn normalize(b: &Value, names: &mut Names) -> Normalized {
     let items = list(b, "items_data").iter().map(|i| item_entity(names, i, "item_size", "icon")).collect();
     let objects = referenced_objects(&recipes, names);
 
-    Normalized { items, objects, groups: BTreeMap::new(), recipes, techs, object_icons: Default::default() }
+    // Branch names are `tbranch_<id>`.
+    let branches = list(b, "tech_branches_data")
+        .iter()
+        .filter_map(|br| text(br, "id").parse::<i64>().ok())
+        .map(|id| (id, format!("tbranch_{id}")))
+        .collect();
+
+    Normalized { items, objects, groups: BTreeMap::new(), recipes, techs, branches, object_icons: Default::default() }
 }

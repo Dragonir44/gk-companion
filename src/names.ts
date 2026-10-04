@@ -3,6 +3,8 @@
 import type { Entity, GameData, Recipe } from "./types";
 
 export interface Namer {
+  /** Text of a localization key, in the current language. */
+  text(key?: string): string | undefined;
   /** Icon sprite of an item or object id. */
   icon(id: string): string | undefined;
   /** Icon of a recipe: its own, else what it makes or acts on. */
@@ -66,6 +68,10 @@ export function namer(data: GameData, lang: string, heavySuffix = ""): Namer {
   };
 
   return {
+    text: (key) => {
+      const v = text(key);
+      return v ? clean(v) : undefined;
+    },
     icon,
     recipeIcon: (r) =>
       r.icon ?? (r.builds && icon(r.builds)) ?? (r.outputs[0] && icon(r.outputs[0].item)) ?? (r.stations[0] && icon(r.stations[0])) ?? undefined,

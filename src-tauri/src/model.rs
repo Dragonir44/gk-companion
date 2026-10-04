@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 /// Bump when the model changes, so stale caches are re-extracted.
-pub const MODEL_VERSION: u32 = 5;
+pub const MODEL_VERSION: u32 = 7;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -38,6 +38,8 @@ pub struct GameData {
     pub groups: BTreeMap<String, Vec<String>>,
     pub recipes: Vec<Recipe>,
     pub techs: Vec<Tech>,
+    /// Research tree tabs, in game order.
+    pub branches: Vec<Branch>,
     /// Language -> text key -> text. Only keys referenced by entities.
     pub locales: BTreeMap<String, BTreeMap<String, String>>,
     #[serde(default)]
@@ -130,6 +132,15 @@ pub struct Stack {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct Branch {
+    /// Value of `Tech::branch`.
+    pub id: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Tech {
     pub id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -144,5 +155,21 @@ pub struct Tech {
     pub cost: BTreeMap<String, f64>,
     /// Recipe ids unlocked.
     pub unlocks: Vec<String>,
+    /// Hidden until revealed in game: a spoiler.
     pub hidden: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
+    /// Not a research but a gate: reputation needed with a character (gk2).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lock: Option<ReputationLock>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReputationLock {
+    /// Character id; `name` is the key of its name.
+    pub npc: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    pub value: f64,
 }

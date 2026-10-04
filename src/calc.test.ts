@@ -23,6 +23,7 @@ const game = (recipes: Recipe[]): GameData => ({
   groups: {},
   recipes,
   techs: [],
+  branches: [],
   locales: {},
   icons: { sheets: [], sheetSizes: [], sprites: {} },
 });

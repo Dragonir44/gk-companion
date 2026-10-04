@@ -51,6 +51,8 @@ pub struct Normalized {
     pub groups: BTreeMap<String, Vec<String>>,
     pub recipes: Vec<Recipe>,
     pub techs: Vec<Tech>,
+    /// Tree tabs: branch id and the text key of its name.
+    pub branches: Vec<(i64, String)>,
     /// Icon sprite per world object id, when the game names one.
     pub object_icons: HashMap<String, String>,
 }
@@ -153,6 +155,11 @@ pub fn extract(game: GameId, root: &Path) -> Result<Extracted, ExtractError> {
         r.name = names.exact(&r.id);
     }
     name_referenced_items(&mut n, &mut names);
+    let branches = n
+        .branches
+        .iter()
+        .map(|(id, key)| crate::model::Branch { id: *id, name: names.exact(key) })
+        .collect();
 
     let (icon_set, icons_error) = match icons::load(game, &data, &schema) {
         Ok(set) => (Some(set), None),
@@ -177,6 +184,7 @@ pub fn extract(game: GameId, root: &Path) -> Result<Extracted, ExtractError> {
         groups: n.groups,
         recipes: n.recipes,
         techs: n.techs,
+        branches,
         locales: names.filter_locales(locales),
         icons: icon_index,
     };
@@ -223,6 +231,9 @@ fn resolve_icons(n: &mut Normalized, set: &icons::IconSet) {
     }
     for r in &mut n.recipes {
         r.icon = r.icon.take().filter(|i| set.has(i));
+    }
+    for t in &mut n.techs {
+        t.icon = t.icon.take().filter(|i| set.has(i));
     }
 }
 
