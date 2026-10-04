@@ -31,7 +31,7 @@ export function installMocks() {
       case "save_slots": {
         const res = await fetch(`/.dev-data/${a.game}-save.json`);
         const saved = res.ok ? await res.json().catch(() => null) : null;
-        return { supported: a.game === "gk2", slots: saved ? [saved.slot] : [] };
+        return { supported: true, slots: saved ? [saved.slot] : [] };
       }
       case "read_save": {
         const res = await fetch(`/.dev-data/${a.game}-save.json`);

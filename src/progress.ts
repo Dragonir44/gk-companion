@@ -22,7 +22,9 @@ export function unlocks(p: Progress | undefined, techs: Tech[]): Unlocks {
   if (!p) return NO_PROGRESS;
   const set = (k: string) => new Set(p.lists[k] ?? []);
   const unlockedTechs = set("unlockedTechs");
-  const hiddenTechs = set("hiddenTechs");
+  const revealedTechs = set("revealedTechs");
+  // gk2 lists what is hidden right now; gk1 only what was revealed.
+  const hiddenTechs = p.lists.hiddenTechs ? set("hiddenTechs") : undefined;
   const crafts = set("unlockedCrafts");
   const buildings = set("unlockedBuildings");
   const blacklist = set("blackListCrafts");
@@ -35,11 +37,13 @@ export function unlocks(p: Progress | undefined, techs: Tech[]): Unlocks {
           ? "available"
           : "locked",
     // The game keeps some unlocked techs in its hidden list; they are known.
-    techHidden: (t) => hiddenTechs.has(t.id) && !unlockedTechs.has(t.id),
+    techHidden: (t) =>
+      !unlockedTechs.has(t.id) && (hiddenTechs ? hiddenTechs.has(t.id) : t.hidden && !revealedTechs.has(t.id)),
     recipeUnlocked: (r) => {
       if (blacklist.has(r.id)) return false;
       if (!r.needsUnlock) return true;
-      return r.kind === "building" ? buildings.has(r.id) : crafts.has(r.id);
+      // gk1 unlocks buildings through its craft list.
+      return crafts.has(r.id) || (r.kind === "building" && buildings.has(r.id));
     },
   };
 }

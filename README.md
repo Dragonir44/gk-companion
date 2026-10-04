@@ -24,9 +24,11 @@ updates and nothing belonging to the publisher is redistributed.
 - `src-tauri/src/extract/icons.rs` — icons cut from the games' sprite
   atlases (gk1: resources.assets; gk2: Addressables bundles, found by
   scanning bundle metadata), written as sheet images next to the cache.
-- `src-tauri/src/save/` — follows the player's save (gk2: Odin Serializer
-  binary, `knowledgeSystem` lists) to show researched techs, what can be
-  researched now, and which recipes are still locked.
+- `src-tauri/src/save/` — follows the player's save to show researched
+  techs, what can be researched now, and which recipes are still locked.
+  gk2: Odin Serializer binary (`knowledgeSystem` lists); gk1: the game's own
+  serialization, first documented by NetroScript's
+  [Graveyard-Keeper-Savefile-Editor](https://github.com/NetroScript/Graveyard-Keeper-Savefile-Editor) (MIT).
 - `src/calc.ts` — the planner: resolves a list down to raw materials,
   aggregates shared intermediates before rounding crafts, breaks crafting
   loops, honours per-item recipe choices and owned quantities.
@@ -59,5 +61,4 @@ python tools/schema-gen/gen_schema.py gk2 "/path/to/Graveyard Keeper 2"
 
 ## Roadmap
 
-- Reading GK1 saves (custom compressed format)
 - Generating schemas at runtime from the game DLLs, so layout changes need no app update

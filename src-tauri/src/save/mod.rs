@@ -1,9 +1,10 @@
 //! Reads the player's progress (unlocked techs and recipes) from saves.
 //!
 //! gk2 saves are Odin Serializer binaries; the progress lives in
-//! `knowledgeSystem` as string lists. gk1 saves use a custom compressed
-//! format, not supported yet.
+//! `knowledgeSystem` as string lists. gk1 saves use the game's own
+//! serialization (see `gk1`). Both yield the same list names.
 
+pub mod gk1;
 pub mod odin;
 
 use std::collections::BTreeMap;
@@ -61,7 +62,7 @@ pub struct Progress {
 }
 
 pub fn supported(game: GameId) -> bool {
-    game == GameId::Gk2
+    matches!(game, GameId::Gk1 | GameId::Gk2)
 }
 
 /// Company and product names from `<Game>_Data/app.info`: they name the
@@ -73,13 +74,17 @@ fn app_info(root: &Path) -> Option<(String, String)> {
     Some((lines.next()?.to_string(), lines.next()?.to_string()))
 }
 
-/// Folders that may hold the game's saves: native Windows, then Proton
-/// prefixes in every Steam library.
+/// Folders that may hold the game's saves (Unity's persistentDataPath):
+/// native Linux, macOS and Windows, then Proton prefixes in every library.
 pub fn save_dirs(game: GameId, install: &Install) -> Vec<PathBuf> {
     let Some((company, product)) = app_info(&install.root) else { return vec![] };
     let local_low = |base: PathBuf| base.join("AppData/LocalLow").join(&company).join(&product);
     let mut dirs = Vec::new();
+    if let Some(config) = dirs::config_dir() {
+        dirs.push(config.join("unity3d").join(&company).join(&product));
+    }
     if let Some(home) = dirs::home_dir() {
+        dirs.push(home.join("Library/Application Support").join(&company).join(&product));
         dirs.push(local_low(home));
     }
     let mut libs: Vec<PathBuf> = install.library.iter().cloned().collect();
@@ -125,7 +130,11 @@ pub fn read_progress(game: GameId, slot: &SaveSlot) -> Result<Progress, SaveErro
         return Err(SaveError::Unsupported);
     }
     let bytes = std::fs::read(&slot.path)?;
-    Ok(Progress { slot: slot.id.clone(), modified: slot.modified, lists: knowledge_lists(&bytes)? })
+    let lists = match game {
+        GameId::Gk1 => gk1::progress_lists(&bytes)?,
+        GameId::Gk2 => knowledge_lists(&bytes)?,
+    };
+    Ok(Progress { slot: slot.id.clone(), modified: slot.modified, lists })
 }
 
 /// String lists directly under `knowledgeSystem/<field>`.
