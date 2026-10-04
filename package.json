@@ -8,7 +8,8 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "test": "vitest run"
+    "test": "vitest run",
+    "tauri:build": "NO_STRIP=1 tauri build && bash scripts/fix-appimage-wayland.sh"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

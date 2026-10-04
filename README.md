@@ -9,6 +9,20 @@ The app ships **no game content**. On launch it reads recipes, techs and texts
 (11 languages) straight from your own install, so it stays in sync with game
 updates and nothing belonging to the publisher is redistributed.
 
+## Install
+
+Download from the [releases](https://github.com/Dragonir44/gk-companion/releases):
+
+- **Linux**: the `.AppImage` (any distro; make it executable, or add it with
+  Gear Lever), or the `.deb` / `.rpm`.
+- **Windows**: the `-setup.exe`. The build is not code-signed, so SmartScreen
+  may warn: *More info → Run anyway*.
+- **macOS**: the `.dmg` (Apple Silicon and Intel). Not notarized: right-click
+  the app → *Open* the first time.
+
+The game must be installed: the app finds it through Steam (or you pick its
+folder) and reads everything from there. It also follows your latest save.
+
 ## How it works
 
 - `src-tauri/src/unity/` — reader for Unity `.assets` files and a typetree
@@ -32,6 +46,13 @@ updates and nothing belonging to the publisher is redistributed.
 - `src/calc.ts` — the planner: resolves a list down to raw materials,
   aggregates shared intermediates before rounding crafts, breaks crafting
   loops, honours per-item recipe choices and owned quantities.
+
+## Releasing
+
+Bump the version in `package.json`, `src-tauri/Cargo.toml` and
+`src-tauri/tauri.conf.json`, then push a matching tag (`git tag v0.2.0 &&
+git push origin v0.2.0`). The `release` workflow builds every platform into a
+draft release to check and publish by hand.
 
 ## Development
 

@@ -38,6 +38,16 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "category": "Game",
+    "publisher": "Dragonir",
+    "shortDescription": "Crafting planner for Graveyard Keeper 1 & 2",
+    "longDescription": "Plan crafts, see the raw materials and crafting tree, browse the research tree, and follow your save's progress. Reads all game data from your own install.",
+    "homepage": "https://github.com/Dragonir44/gk-companion",
+    "linux": {
+      "deb": {
+        "depends": []
+      }
+    }
   }
 }
