@@ -3,6 +3,10 @@
 import type { Entity, GameData, Recipe } from "./types";
 
 export interface Namer {
+  /** Icon sprite of an item or object id. */
+  icon(id: string): string | undefined;
+  /** Icon of a recipe: its own, else what it makes or acts on. */
+  recipeIcon(r: Recipe): string | undefined;
   name(id: string): string;
   desc(id: string): string | undefined;
   recipe(r: Recipe): string;
@@ -54,7 +58,17 @@ export function namer(data: GameData, lang: string, heavySuffix = ""): Namer {
     return (t ? clean(t) + quality(id) : prettify(id)) + heavy;
   };
 
+  const icon = (id: string): string | undefined => {
+    const e = entities.get(id);
+    if (e && "icon" in e && e.icon) return e.icon;
+    const members = data.groups[id];
+    return members?.length ? icon(members[0]) : undefined;
+  };
+
   return {
+    icon,
+    recipeIcon: (r) =>
+      r.icon ?? (r.builds && icon(r.builds)) ?? (r.outputs[0] && icon(r.outputs[0].item)) ?? (r.stations[0] && icon(r.stations[0])) ?? undefined,
     name,
     desc: (id) => text(entities.get(id)?.desc),
     // Own name first; crafts acting on the world (repairs, clearing) are

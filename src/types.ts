@@ -8,6 +8,7 @@ export interface Entity {
   name?: string;
   desc?: string;
   heavy?: boolean;
+  icon?: string;
 }
 
 export interface Stack {
@@ -21,6 +22,7 @@ export interface Stack {
 export interface Recipe {
   id: string;
   name?: string;
+  icon?: string;
   kind: "craft" | "building";
   stations: string[];
   inputs: Stack[];
@@ -57,6 +59,14 @@ export interface GameData {
   recipes: Recipe[];
   techs: Tech[];
   locales: Record<string, Record<string, string>>;
+  icons: IconIndex;
+}
+
+export interface IconIndex {
+  sheets: string[];
+  sheetSizes: [number, number][];
+  /** Sprite -> [sheet, x, y, width, height], top-left origin. */
+  sprites: Record<string, [number, number, number, number, number]>;
 }
 
 export interface Install {
@@ -75,6 +85,7 @@ export interface LoadResult {
   data: GameData;
   freshness: "extracted" | "cached" | "stale";
   warning?: string;
+  iconDir: string;
 }
 
 // --- Craft lists (persisted by the backend as opaque JSON) -----------------

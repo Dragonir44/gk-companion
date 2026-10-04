@@ -20,6 +20,9 @@ updates and nothing belonging to the publisher is redistributed.
   its last good cache and asks for an app update.
 - `src-tauri/src/extract/` — turns each game's data into one shared model
   (`model.rs`), cached per game and re-extracted when game files change.
+- `src-tauri/src/extract/icons.rs` — icons cut from the games' sprite
+  atlases (gk1: resources.assets; gk2: Addressables bundles, found by
+  scanning bundle metadata), written as sheet images next to the cache.
 - `src/calc.ts` — the planner: resolves a list down to raw materials,
   aggregates shared intermediates before rounding crafts, breaks crafting
   loops, honours per-item recipe choices and owned quantities.
@@ -52,7 +55,6 @@ python tools/schema-gen/gen_schema.py gk2 "/path/to/Graveyard Keeper 2"
 
 ## Roadmap
 
-- Item icons, extracted from the game's sprites
 - Research tree view
 - Reading the save to show unlocked techs and recipes (no spoilers):
   GK2 first (Odin binary, `unlockedTechs`), then GK1 (custom compressed format)

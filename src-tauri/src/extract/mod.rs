@@ -3,6 +3,7 @@
 mod expr;
 mod gk1;
 mod gk2;
+pub mod icons;
 mod names;
 
 use std::collections::{BTreeMap, HashMap};
@@ -33,6 +34,8 @@ pub enum ExtractError {
     /// The game was updated in a way this app version can't read yet.
     #[error("game data layout changed ({0}); an app update is needed")]
     Outdated(String),
+    #[error("icons: {0}")]
+    Icons(String),
 }
 
 impl From<std::io::Error> for ExtractError {
@@ -48,6 +51,15 @@ pub struct Normalized {
     pub groups: BTreeMap<String, Vec<String>>,
     pub recipes: Vec<Recipe>,
     pub techs: Vec<Tech>,
+    /// Icon sprite per world object id, when the game names one.
+    pub object_icons: HashMap<String, String>,
+}
+
+/// Extraction result; icons are optional: data stays usable without them.
+pub struct Extracted {
+    pub data: GameData,
+    pub icons: Option<icons::IconSet>,
+    pub icons_error: Option<String>,
 }
 
 fn balance_object(game: GameId) -> &'static str {
@@ -77,7 +89,8 @@ fn data_dir(root: &Path) -> Result<PathBuf, ExtractError> {
 pub fn fingerprint(root: &Path) -> Result<String, ExtractError> {
     let data = data_dir(root)?;
     let mut parts = vec![format!("m{MODEL_VERSION}")];
-    for f in ["resources.assets", "Managed/Assembly-CSharp.dll"] {
+    // The Addressables catalog changes whenever gk2's bundles do.
+    for f in ["resources.assets", "Managed/Assembly-CSharp.dll", "StreamingAssets/aa/catalog.bin"] {
         let p = data.join(f);
         let Ok(meta) = std::fs::metadata(&p) else { continue };
         let mtime = meta.modified().ok().and_then(|t| t.duration_since(UNIX_EPOCH).ok()).map(|d| d.as_secs());
@@ -86,7 +99,7 @@ pub fn fingerprint(root: &Path) -> Result<String, ExtractError> {
     Ok(parts.join("-"))
 }
 
-pub fn extract(game: GameId, root: &Path) -> Result<GameData, ExtractError> {
+pub fn extract(game: GameId, root: &Path) -> Result<Extracted, ExtractError> {
     let schema = Schema::parse(match game {
         GameId::Gk1 => GK1_SCHEMA,
         GameId::Gk2 => GK2_SCHEMA,
@@ -141,7 +154,20 @@ pub fn extract(game: GameId, root: &Path) -> Result<GameData, ExtractError> {
     }
     name_referenced_items(&mut n, &mut names);
 
-    Ok(GameData {
+    let (icon_set, icons_error) = match icons::load(game, &data, &schema) {
+        Ok(set) => (Some(set), None),
+        Err(e) => (None, Some(e.to_string())),
+    };
+    let mut icon_index = crate::model::IconIndex::default();
+    if let Some(set) = &icon_set {
+        resolve_icons(&mut n, set);
+        let used = n.items.iter().chain(&n.objects).filter_map(|e| e.icon.clone());
+        let used = used.chain(n.recipes.iter().filter_map(|r| r.icon.clone()));
+        icon_index.sprites = icons::referenced(set, used);
+        icon_index.sheet_sizes = set.sheets.iter().map(|s| [s.width, s.height]).collect();
+    }
+
+    let data = GameData {
         model_version: MODEL_VERSION,
         game,
         fingerprint: fingerprint(root)?,
@@ -152,7 +178,52 @@ pub fn extract(game: GameId, root: &Path) -> Result<GameData, ExtractError> {
         recipes: n.recipes,
         techs: n.techs,
         locales: names.filter_locales(locales),
-    })
+        icons: icon_index,
+    };
+    Ok(Extracted { data, icons: icon_set, icons_error })
+}
+
+/// Icon candidates for an item id: its own sprite, then the conventions the
+/// games use (`i_<id>`, carried variants, quality-less ids).
+fn item_icon_candidates(id: &str) -> Vec<String> {
+    let mut bases = vec![id.to_string(), id.replace(':', "_")];
+    bases.extend(id.split(':').filter(|p| !p.is_empty() && p.parse::<f64>().is_err()).map(str::to_string));
+    let mut out = Vec::new();
+    for b in &bases {
+        out.extend(["i_", "i_2h_", "i_1h_"].map(|p| format!("{p}{b}")));
+    }
+    for b in &bases {
+        let mut cur = b.as_str();
+        while let Some(i) = cur.rfind('_') {
+            cur = &cur[..i];
+            out.push(format!("i_{cur}"));
+        }
+    }
+    out
+}
+
+fn object_icon_candidates(id: &str) -> Vec<String> {
+    let mut out = vec![format!("i_b_{id}"), format!("i_{id}")];
+    let mut cur = id;
+    while let Some(i) = cur.rfind('_') {
+        cur = &cur[..i];
+        out.push(format!("i_b_{cur}"));
+    }
+    out
+}
+
+/// Replaces declared icons with ones that exist, trying fallbacks.
+fn resolve_icons(n: &mut Normalized, set: &icons::IconSet) {
+    let pick = |declared: Option<String>, fallbacks: Vec<String>| declared.into_iter().chain(fallbacks).find(|c| set.has(c));
+    for e in &mut n.items {
+        e.icon = pick(e.icon.take(), item_icon_candidates(&e.id));
+    }
+    for e in &mut n.objects {
+        e.icon = pick(n.object_icons.get(&e.id).cloned(), object_icon_candidates(&e.id));
+    }
+    for r in &mut n.recipes {
+        r.icon = r.icon.take().filter(|i| set.has(i));
+    }
 }
 
 /// Developer test ids contain a `test` segment (`test_flitch`, `slava_test_builder`).
@@ -218,7 +289,7 @@ fn flag(v: &Value, key: &str) -> bool {
 fn entity(names: &mut Names, id: &str) -> Entity {
     let name = names.name(id);
     let desc = name.as_deref().and_then(|k| names.desc(k));
-    Entity { id: id.to_string(), name, desc, heavy: false }
+    Entity { id: id.to_string(), name, desc, heavy: false, icon: None }
 }
 
 /// Recipes often use an item without its quality suffix (`meal:burger`)
@@ -239,8 +310,15 @@ fn name_referenced_items(n: &mut Normalized, names: &mut Names) {
 /// Item sizes above 1 are carried overhead.
 const HEAVY_ITEM_SIZE: f64 = 2.0;
 
-fn item_entity(names: &mut Names, item: &Value, size_field: &str) -> Entity {
-    Entity { heavy: num(item, size_field) >= HEAVY_ITEM_SIZE, ..entity(names, text(item, "id")) }
+/// `icon_field`: the game's own icon sprite for the item, if any.
+fn item_entity(names: &mut Names, item: &Value, size_field: &str, icon_field: &str) -> Entity {
+    let icon = Some(text(item, icon_field)).filter(|i| !i.is_empty()).map(str::to_string);
+    Entity { heavy: num(item, size_field) >= HEAVY_ITEM_SIZE, icon, ..entity(names, text(item, "id")) }
+}
+
+/// Non-empty string field.
+fn opt_text(v: &Value, key: &str) -> Option<String> {
+    Some(text(v, key)).filter(|s| !s.is_empty()).map(str::to_string)
 }
 
 /// Objects referenced by recipes (stations, built objects), in a stable order.

@@ -315,7 +315,7 @@ input[type="number"] {
   padding: 6px 4px;
   border-bottom: 1px solid var(--line);
 }
-.entry .recipe-line {
+.entry .recipe-row {
   flex: 1;
 }
 button.icon {
@@ -453,4 +453,36 @@ button.icon:hover {
 .tree .qty {
   display: inline-block;
   min-width: 36px;
+}
+
+/* --- Icons ------------------------------------------------------------ */
+
+.icon-box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  vertical-align: middle;
+}
+.icon {
+  display: block;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+}
+.recipe-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+.item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }

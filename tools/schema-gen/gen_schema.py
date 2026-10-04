@@ -19,13 +19,20 @@ import os
 import sys
 
 import UnityPy
+from UnityPy.helpers.Tpk import get_common_strings, get_typetree_node
 from UnityPy.helpers.TypeTreeGenerator import TypeTreeGenerator
+from UnityPy.helpers.UnityVersion import UnityVersion
 
 # Objects to read, by m_Name. The script class is resolved from the asset.
 TARGETS = {
     "gk1": ["game_data", "lng_en"],
     "gk2": ["GameBalance", "lng_en"],
 }
+
+# Built-in Unity classes read for icons, by class id. Their layout depends
+# only on the Unity version (gk1 assets have no typetrees; gk2 bundles do,
+# but these serve as a fallback).
+BUILTIN = {"Texture2D": 28, "Sprite": 213, "SpriteAtlas": 687078895}
 
 OUT_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "src-tauri", "schemas")
 
@@ -79,11 +86,17 @@ def main(game, game_root):
         }
         print(f"{name}: {len(node.m_Children)} fields, hash {classes[name]['type_hash']}")
 
+    version = UnityVersion.from_str(assets.unity_version)
+    builtin = {str(cid): table.add(get_typetree_node(cid, version)) for cid in BUILTIN.values()}
+
     schema = {
-        "schema_version": 1,
+        "schema_version": 2,
         "game": game,
         "unity_version": assets.unity_version,
         "classes": classes,
+        "builtin": builtin,
+        # Unity's shared string table, used by embedded typetrees.
+        "common_strings": {str(k): v for k, v in get_common_strings(version).items()},
         "nodes": table.nodes,
     }
     os.makedirs(OUT_DIR, exist_ok=True)

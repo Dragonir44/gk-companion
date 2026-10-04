@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 /// Bump when the model changes, so stale caches are re-extracted.
-pub const MODEL_VERSION: u32 = 4;
+pub const MODEL_VERSION: u32 = 5;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -40,6 +40,20 @@ pub struct GameData {
     pub techs: Vec<Tech>,
     /// Language -> text key -> text. Only keys referenced by entities.
     pub locales: BTreeMap<String, BTreeMap<String, String>>,
+    #[serde(default)]
+    pub icons: IconIndex,
+}
+
+/// Icon sprites, cut from sheet images written next to the cache.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IconIndex {
+    /// Sheet image file names, relative to the cache directory.
+    pub sheets: Vec<String>,
+    /// Sheet sizes, `[width, height]`, same order as `sheets`.
+    pub sheet_sizes: Vec<[u32; 2]>,
+    /// Sprite name -> `[sheet, x, y, width, height]` (top-left origin).
+    pub sprites: BTreeMap<String, [u32; 5]>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -55,6 +69,9 @@ pub struct Entity {
     /// heavy item and its hand-held pieces the same name.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub heavy: bool,
+    /// Icon sprite name (see `IconIndex`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -72,6 +89,9 @@ pub struct Recipe {
     /// game has one; otherwise it is named after what it makes or acts on.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+    /// Own icon (world crafts, buildings); otherwise use what it makes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
     pub kind: RecipeKind,
     /// Object ids where this recipe can be made.
     pub stations: Vec<String>,

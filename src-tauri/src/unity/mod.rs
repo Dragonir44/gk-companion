@@ -1,3 +1,4 @@
+pub mod bundle;
 pub mod serialized;
 pub mod typetree;
 

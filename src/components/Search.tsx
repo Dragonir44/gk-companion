@@ -3,6 +3,7 @@ import { useDeferredValue, useMemo, useState } from "react";
 import { useStore } from "../store";
 import type { Recipe } from "../types";
 import { Points, useGame } from "./ctx";
+import { Icon } from "./Icon";
 
 const MAX_RESULTS = 120;
 
@@ -80,7 +81,9 @@ export function RecipeLine({ r, label }: { r: Recipe; label?: string }) {
   const out = r.outputs[0];
   const station = n.station(r);
   return (
-    <span className="recipe-line">
+    <span className="recipe-row">
+      <Icon sprite={n.recipeIcon(r)} size={32} />
+      <span className="recipe-line">
       <span className="recipe-name">
         {label ?? n.recipe(r)}
         {out && out.count > 1 && <span className="muted"> ×{out.count}</span>}
@@ -92,6 +95,7 @@ export function RecipeLine({ r, label }: { r: Recipe; label?: string }) {
         {station ? `${t.at} ${station}` : r.kind === "craft" && t.anywhere}
         {r.stations.length > 1 && ` (+${r.stations.length - 1})`}
         <Points points={r.points} />
+      </span>
       </span>
     </span>
   );

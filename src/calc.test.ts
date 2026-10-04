@@ -24,6 +24,7 @@ const game = (recipes: Recipe[]): GameData => ({
   recipes,
   techs: [],
   locales: {},
+  icons: { sheets: [], sheetSizes: [], sprites: {} },
 });
 
 // ore -> ingot (1:1), ingot -> 4 nails, plank + 2 nails -> crate

@@ -8,6 +8,7 @@ import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
 let lists: unknown = null;
 
 export function installMocks() {
+  (window as unknown as { __GK_MOCK__: boolean }).__GK_MOCK__ = true;
   mockWindows("main");
   mockIPC(async (cmd, args) => {
     const a = (args ?? {}) as Record<string, unknown>;
@@ -17,7 +18,7 @@ export function installMocks() {
       case "load_game": {
         const res = await fetch(`/.dev-data/${a.game}.json`);
         if (!res.ok) throw "game-not-found";
-        return { data: await res.json(), freshness: "cached" };
+        return { data: await res.json(), freshness: "cached", iconDir: "/.dev-data" };
       }
       case "load_lists":
         return lists;

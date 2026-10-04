@@ -4,6 +4,7 @@ import { chosenRecipe, isProduction, plan, RAW, tree, type Plan, type TreeNode }
 import { useActiveList, useStore } from "../store";
 import type { CraftList } from "../types";
 import { fmtNum, Points, useGame } from "./ctx";
+import { Icon } from "./Icon";
 
 type Tab = "materials" | "steps" | "tree";
 
@@ -54,7 +55,10 @@ function Materials({ p, list }: { p: Plan; list: CraftList }) {
               <tr key={item}>
                 <td className="qty">{fmtNum(qty)}</td>
                 <td>
-                  {n.name(item)}
+                  <span className="item">
+                    <Icon sprite={n.icon(item)} size={24} />
+                    {n.name(item)}
+                  </span>
                   {idx.producers.has(item) && <ItemChoice item={item} compact />}
                 </td>
                 <td className="have">{haveInput(item)}</td>
@@ -64,7 +68,11 @@ function Materials({ p, list }: { p: Plan; list: CraftList }) {
               <tr key={g}>
                 <td className="qty">{fmtNum(qty)}</td>
                 <td colSpan={2}>
-                  {n.name(g)} <span className="badge">{t.anyOf}</span>
+                  <span className="item">
+                    <Icon sprite={n.icon(g)} size={24} />
+                    {n.name(g)}
+                  </span>{" "}
+                  <span className="badge">{t.anyOf}</span>
                   <div className="muted small">{(idx.data.groups[g] ?? []).map(n.name).join(", ")}</div>
                 </td>
               </tr>
@@ -81,7 +89,12 @@ function Materials({ p, list }: { p: Plan; list: CraftList }) {
               {sorted(p.used).map(([item, qty]) => (
                 <tr key={item}>
                   <td className="qty">{fmtNum(qty)}</td>
-                  <td>{n.name(item)}</td>
+                  <td>
+                    <span className="item">
+                      <Icon sprite={n.icon(item)} size={24} />
+                      {n.name(item)}
+                    </span>
+                  </td>
                   <td className="have">{haveInput(item)}</td>
                 </tr>
               ))}
@@ -95,6 +108,7 @@ function Materials({ p, list }: { p: Plan; list: CraftList }) {
           <p className="chips">
             {sorted(p.surplus).map(([item, qty]) => (
               <span key={item} className="chip">
+                <Icon sprite={n.icon(item)} size={16} />
                 {fmtNum(qty)} {n.name(item)}
               </span>
             ))}
@@ -126,7 +140,8 @@ function Steps({ p, list }: { p: Plan; list: CraftList }) {
       {steps.map((s, i) => (
         <li key={`${s.recipe.id}-${s.item}-${i}`}>
           <span className="qty">{s.crafts}×</span>
-          <span>
+          <span className="item">
+            <Icon sprite={n.icon(s.item!)} size={24} />
             <strong>{n.name(s.item!)}</strong>
             {s.recipe.outputs.find((o) => o.item === s.item)!.count > 1 && (
               <span className="muted"> (×{s.recipe.outputs.find((o) => o.item === s.item)!.count})</span>
@@ -155,7 +170,7 @@ function Tree({ list }: { list: CraftList }) {
         return (
           <details key={e.recipe} open>
             <summary>
-              <span className="qty">{e.count}×</span> <strong>{n.recipe(r)}</strong>
+              <span className="qty">{e.count}×</span> <Icon sprite={n.recipeIcon(r)} size={24} /> <strong>{n.recipe(r)}</strong>
             </summary>
             <ul>
               {tree(idx, r, e.count, list.choices).map((node, i) => (
@@ -173,7 +188,7 @@ function TreeItem({ node }: { node: TreeNode }) {
   const { t, n } = useGame();
   const label = (
     <>
-      <span className="qty">{fmtNum(node.qty)}</span> {n.name(node.item)}
+      <span className="qty">{fmtNum(node.qty)}</span> <Icon sprite={n.icon(node.item)} size={20} /> {n.name(node.item)}
       {node.group && <span className="badge">{t.anyOf}</span>}
       {node.recipe && (
         <span className="muted">

@@ -69,6 +69,7 @@ pub fn normalize(b: &Value, names: &mut Names) -> Normalized {
         recipes.push(Recipe {
             id: text(c, "id").to_string(),
             name: None,
+            icon: super::opt_text(c, "iconId"),
             kind: RecipeKind::Craft,
             stations: super::strings(c, &["craftsIn"]),
             inputs: needs(list(c, "needItems")),
@@ -91,6 +92,7 @@ pub fn normalize(b: &Value, names: &mut Names) -> Normalized {
         recipes.push(Recipe {
             id: text(c, "id").to_string(),
             name: None,
+            icon: super::opt_text(c, "buildResultIcon"),
             kind: RecipeKind::Building,
             stations: super::strings(c, &["buildsIn"]),
             inputs: needs(list(c, "needItems")),
@@ -138,11 +140,16 @@ pub fn normalize(b: &Value, names: &mut Names) -> Normalized {
         for g in super::strings(i, &["itemGroupIds"]) {
             groups.entry(g).or_default().push(id.to_string());
         }
-        items.push(item_entity(names, i, "itemSize"));
+        items.push(item_entity(names, i, "itemSize", "iconId"));
     }
     // Group ids appear as ingredients, so they get names like items.
     items.extend(groups.keys().map(|g| entity(names, g)));
     let objects = referenced_objects(&recipes, names);
 
-    Normalized { items, objects, groups, recipes, techs }
+    let object_icons = list(b, "wgoDefs")
+        .iter()
+        .filter_map(|w| Some((text(w, "id").to_string(), super::opt_text(w, "craftIconId")?)))
+        .collect();
+
+    Normalized { items, objects, groups, recipes, techs, object_icons }
 }

@@ -13,7 +13,8 @@ use super::UnityError;
 const ALIGN_BYTES: u32 = 0x4000;
 const MAX_ARRAY_LEN: i32 = 10_000_000;
 
-#[derive(Debug, Deserialize)]
+/// `[name, type, meta_flag, child indices]`.
+#[derive(Debug, Clone, Deserialize)]
 pub struct Node(pub String, pub String, pub u32, pub Vec<usize>);
 
 #[derive(Debug, Deserialize)]
@@ -27,13 +28,19 @@ pub struct Schema {
     pub game: String,
     pub unity_version: String,
     pub classes: HashMap<String, ClassSchema>,
+    /// Built-in Unity classes (Texture2D, Sprite, SpriteAtlas) by class id.
+    #[serde(default)]
+    pub builtin: HashMap<String, usize>,
+    #[serde(default)]
+    pub common_strings: HashMap<u32, String>,
     pub nodes: Vec<Node>,
 }
 
 impl Schema {
     pub fn parse(json: &str) -> Result<Self, UnityError> {
         let schema: Schema = serde_json::from_str(json).map_err(|e| UnityError::Format(format!("schema: {e}")))?;
-        if schema.nodes.iter().flat_map(|n| &n.3).any(|&c| c >= schema.nodes.len()) {
+        let roots = schema.classes.values().map(|c| c.root).chain(schema.builtin.values().copied());
+        if schema.nodes.iter().flat_map(|n| &n.3).copied().chain(roots).any(|c| c >= schema.nodes.len()) {
             return Err(UnityError::Format("schema: dangling child index".into()));
         }
         Ok(schema)
@@ -46,21 +53,28 @@ impl Schema {
             .classes
             .get(class)
             .ok_or_else(|| UnityError::Format(format!("schema has no class {class}")))?;
-        let mut r = Reader { schema: self, data, pos: 0 };
-        let value = r.read(cls.root, class)?;
-        if r.pos != data.len() {
-            return Err(UnityError::LayoutMismatch(format!(
-                "{class}: read {} of {} bytes",
-                r.pos,
-                data.len()
-            )));
-        }
-        Ok(value)
+        decode(&self.nodes, cls.root, data, class)
+    }
+
+    /// Root of a built-in class layout, by Unity class id.
+    pub fn builtin_root(&self, class_id: i32) -> Option<usize> {
+        self.builtin.get(&class_id.to_string()).copied()
     }
 }
 
+/// Decode `data` with the tree rooted at `root`. The read must consume the
+/// object exactly: a short or long read means the layout is wrong.
+pub fn decode(nodes: &[Node], root: usize, data: &[u8], what: &str) -> Result<Value, UnityError> {
+    let mut r = Reader { nodes, data, pos: 0 };
+    let value = r.read(root, what)?;
+    if r.pos != data.len() {
+        return Err(UnityError::LayoutMismatch(format!("{what}: read {} of {} bytes", r.pos, data.len())));
+    }
+    Ok(value)
+}
+
 struct Reader<'a> {
-    schema: &'a Schema,
+    nodes: &'a [Node],
     data: &'a [u8],
     pos: usize,
 }
@@ -84,7 +98,7 @@ impl<'a> Reader<'a> {
     }
 
     fn node(&self, idx: usize) -> &'a Node {
-        &self.schema.nodes[idx]
+        &self.nodes[idx]
     }
 
     /// A node is a string when it is the primitive `string` type: either a
@@ -128,6 +142,15 @@ impl<'a> Reader<'a> {
                 let s = String::from_utf8_lossy(self.take(len as usize, path)?).into_owned();
                 self.align();
                 Value::String(s)
+            }
+            // Raw bytes (texture data): length-prefixed, never needed inline.
+            "TypelessData" => {
+                let len = self.i32(path)?;
+                if len < 0 {
+                    return Err(UnityError::LayoutMismatch(format!("negative data length at {path}")));
+                }
+                self.take(len as usize, path)?;
+                Value::Null
             }
             "Array" => {
                 let len = self.i32(path)?;

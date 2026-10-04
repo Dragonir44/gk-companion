@@ -71,6 +71,7 @@ pub fn normalize(b: &Value, names: &mut Names) -> Normalized {
         recipes.push(Recipe {
             id: text(c, "id").to_string(),
             name: None,
+            icon: super::opt_text(c, "icon"),
             kind: RecipeKind::Craft,
             stations: super::strings(c, &["craft_in"]),
             inputs: stacks(list(c, "needs")),
@@ -91,6 +92,7 @@ pub fn normalize(b: &Value, names: &mut Names) -> Normalized {
         recipes.push(Recipe {
             id: text(c, "id").to_string(),
             name: None,
+            icon: super::opt_text(c, "icon"),
             kind: RecipeKind::Building,
             stations,
             inputs: stacks(list(c, "needs")),
@@ -131,8 +133,8 @@ pub fn normalize(b: &Value, names: &mut Names) -> Normalized {
         })
         .collect();
 
-    let items = list(b, "items_data").iter().map(|i| item_entity(names, i, "item_size")).collect();
+    let items = list(b, "items_data").iter().map(|i| item_entity(names, i, "item_size", "icon")).collect();
     let objects = referenced_objects(&recipes, names);
 
-    Normalized { items, objects, groups: BTreeMap::new(), recipes, techs }
+    Normalized { items, objects, groups: BTreeMap::new(), recipes, techs, object_icons: Default::default() }
 }

@@ -43,6 +43,8 @@ pub struct LoadResult {
     pub data: GameData,
     pub freshness: Freshness,
     pub warning: Option<String>,
+    /// Directory holding the icon sheets named in `data.icons.sheets`.
+    pub icon_dir: PathBuf,
 }
 
 type CmdResult<T> = Result<T, String>;
@@ -73,15 +75,22 @@ fn load_settings(app: &AppHandle) -> CmdResult<Settings> {
     Ok(read_json(&settings_path(app)?).unwrap_or_default())
 }
 
-fn cache_path(app: &AppHandle, game: GameId) -> CmdResult<PathBuf> {
+fn cache_dir(app: &AppHandle) -> CmdResult<PathBuf> {
     let d = dir(app, false)?.join("cache");
     std::fs::create_dir_all(&d).map_err(|e| e.to_string())?;
-    Ok(d.join(format!("{}.json", game.as_str())))
+    Ok(d)
 }
 
+fn cache_path(app: &AppHandle, game: GameId) -> CmdResult<PathBuf> {
+    Ok(cache_dir(app)?.join(format!("{}.json", game.as_str())))
+}
+
+/// A cache is usable when its model is current and its icon sheets exist.
 fn read_cache(app: &AppHandle, game: GameId) -> Option<GameData> {
     let data: GameData = read_json(&cache_path(app, game).ok()?)?;
-    (data.model_version == MODEL_VERSION).then_some(data)
+    let dir = cache_dir(app).ok()?;
+    let sheets_ok = data.icons.sheets.iter().all(|s| dir.join(s).is_file());
+    (data.model_version == MODEL_VERSION && sheets_ok).then_some(data)
 }
 
 fn install_for(settings: &Settings, game: GameId) -> (Option<Install>, bool) {
@@ -116,7 +125,13 @@ pub async fn load_game(app: AppHandle, game: GameId) -> CmdResult<LoadResult> {
 fn load_game_blocking(app: &AppHandle, game: GameId) -> CmdResult<LoadResult> {
     let settings = load_settings(app)?;
     let cache = read_cache(app, game);
-    let stale = |cache: GameData, warning: String| LoadResult { data: cache, freshness: Freshness::Stale, warning: Some(warning) };
+    let icon_dir = cache_dir(app)?;
+    let stale = |cache: GameData, warning: String| LoadResult {
+        data: cache,
+        freshness: Freshness::Stale,
+        warning: Some(warning),
+        icon_dir: icon_dir.clone(),
+    };
 
     let Some(install) = install_for(&settings, game).0 else {
         return match cache {
@@ -129,14 +144,31 @@ fn load_game_blocking(app: &AppHandle, game: GameId) -> CmdResult<LoadResult> {
     if let (Some(c), Some(fp)) = (&cache, &fingerprint) {
         if &c.fingerprint == fp {
             let data = cache.unwrap();
-            return Ok(LoadResult { data, freshness: Freshness::Cached, warning: None });
+            return Ok(LoadResult { data, freshness: Freshness::Cached, warning: None, icon_dir });
         }
     }
 
     match extract::extract(game, &install.root) {
-        Ok(data) => {
+        Ok(extracted) => {
+            let mut data = extracted.data;
+            if let Some(err) = extracted.icons_error {
+                eprintln!("icons of {}: {err}", game.as_str());
+            }
+            if let Some(set) = extracted.icons {
+                // Sheets are named by fingerprint: an open webview never
+                // shows a stale image from its cache after a game update.
+                let prefix = format!("{}-icons-{:x}", game.as_str(), hash(&data.fingerprint));
+                remove_old_sheets(&icon_dir, game);
+                match set.write_sheets(&icon_dir, &prefix) {
+                    Ok(names) => data.icons.sheets = names,
+                    Err(e) => {
+                        eprintln!("writing icons of {}: {e}", game.as_str());
+                        data.icons = Default::default();
+                    }
+                }
+            }
             write_json(&cache_path(app, game)?, &data)?;
-            Ok(LoadResult { data, freshness: Freshness::Extracted, warning: None })
+            Ok(LoadResult { data, freshness: Freshness::Extracted, warning: None, icon_dir })
         }
         Err(e) => {
             let code = match &e {
@@ -148,6 +180,22 @@ fn load_game_blocking(app: &AppHandle, game: GameId) -> CmdResult<LoadResult> {
                 Some(c) => Ok(stale(c, code.into())),
                 None => Err(format!("{code}: {e}")),
             }
+        }
+    }
+}
+
+fn hash(s: &str) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    s.hash(&mut h);
+    h.finish()
+}
+
+fn remove_old_sheets(dir: &Path, game: GameId) {
+    let prefix = format!("{}-icons-", game.as_str());
+    for e in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+        if e.file_name().to_string_lossy().starts_with(&prefix) {
+            let _ = std::fs::remove_file(e.path());
         }
     }
 }
