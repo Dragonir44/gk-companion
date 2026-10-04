@@ -46,8 +46,9 @@ jobs:
             bundles: appimage,deb,rpm
           - os: windows-latest
             bundles: nsis
+          # "app" too: the updater archive (.app.tar.gz) is made from it.
           - os: macos-latest
-            bundles: dmg
+            bundles: app,dmg
             args: --target universal-apple-darwin
     runs-on: ${{ matrix.os }}
     steps:
@@ -129,7 +130,7 @@ jobs:
           entry() { # platform, asset, optional
             if [ ! -f "$2.sig" ]; then
               [ "${3:-}" = optional ] && return 0
-              echo "missing $2.sig" >&2; exit 1
+              echo "missing $2.sig (have: $(ls))" >&2; exit 1
             fi
             jq -n --arg sig "$(cat "$2.sig")" --arg url "$base/$2" '{signature: $sig, url: $url}' > "platform-$1.json"
           }
