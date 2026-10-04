@@ -5,8 +5,9 @@ import { relaunch } from "@tauri-apps/plugin-process";
 import { check, type Update } from "@tauri-apps/plugin-updater";
 import { create } from "zustand";
 
-/** Re-check on window focus at most this often. */
-const RECHECK_MS = 60 * 60 * 1000;
+/** Re-check on window focus at most this often (latest.json is a plain
+ * release download, not the rate-limited API). */
+const RECHECK_MS = 15 * 60 * 1000;
 
 interface UpdateState {
   update: Update | null;
