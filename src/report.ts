@@ -20,9 +20,10 @@ export interface Diagnostics {
   games: { game: GameId; found: boolean; manual: boolean; buildId?: string | null; saveDirs: number }[];
 }
 
-/** What the frontend knows on top: data state per game, language. */
+/** What the frontend knows on top: current game, data state, language. */
 export interface ReportContext {
   diag: Diagnostics;
+  game: GameId;
   lang: string;
   data: Partial<Record<GameId, { freshness?: string; warning?: string; save?: string }>>;
 }
@@ -45,9 +46,26 @@ export function diagnosticsText({ diag, lang, data }: ReportContext): string {
   return lines.join("\n");
 }
 
-/** Issue form URL; form fields are prefilled through query parameters. */
+/**
+ * Markdown body used when GitHub shows a plain issue instead of the form
+ * (form missing or not yet published): same sections, diagnostics included.
+ */
+export function fallbackBody(kind: ReportKind, ctx: ReportContext): string {
+  const sections =
+    kind === "bug"
+      ? ["Jeu concerné / Game: " + GAME_NAMES[ctx.game], "## Que s'est-il passé ? / What happened?", "## Qu'attendais-tu ? / What did you expect?", "## Comment le reproduire ? / How to reproduce?\n1. \n2. "]
+      : ["## Ton idée / Your idea", "## Pourquoi, dans quelle situation ? / Why, in which situation?"];
+  return [...sections, "## Diagnostic", "```text\n" + diagnosticsText(ctx) + "\n```"].join("\n\n");
+}
+
+/**
+ * Issue form URL. Form fields are prefilled by id through query
+ * parameters; `body` only applies if GitHub falls back to a plain issue.
+ */
 export function issueUrl(kind: ReportKind, ctx: ReportContext): string {
   const t = TEMPLATES[kind];
   const params = new URLSearchParams({ template: t.file, title: t.title, diagnostics: diagnosticsText(ctx) });
+  if (kind === "bug") params.set("game", GAME_NAMES[ctx.game]);
+  params.set("body", fallbackBody(kind, ctx));
   return `${REPO}/issues/new?${params}`;
 }

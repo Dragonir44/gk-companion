@@ -11,6 +11,7 @@ const ctx: ReportContext = {
       { game: "gk2", found: false, manual: false, buildId: null, saveDirs: 0 },
     ],
   },
+  game: "gk1",
   lang: "fr",
   data: { gk1: { freshness: "cached", save: "followed" } },
 };
@@ -29,5 +30,17 @@ describe("report", () => {
     expect(url.pathname).toBe("/Dragonir44/gk-companion/issues/new");
     expect(url.searchParams.get("template")).toBe("feature_request.yml");
     expect(url.searchParams.get("diagnostics")).toContain("v0.1.4");
+    expect(url.searchParams.has("game")).toBe(false);
+  });
+
+  it("prefills the game of a bug report with the form's option text", () => {
+    const url = new URL(issueUrl("bug", ctx));
+    expect(url.searchParams.get("game")).toBe("Graveyard Keeper");
+  });
+
+  it("carries a Markdown body for when GitHub shows a plain issue", () => {
+    const body = new URL(issueUrl("bug", ctx)).searchParams.get("body") ?? "";
+    expect(body).toContain("## Comment le reproduire ? / How to reproduce?");
+    expect(body).toContain("```text\n- GK Companion v0.1.4");
   });
 });

@@ -21,7 +21,7 @@ export function ReportMenu({ t }: { t: Strings }) {
 
   const report = async (kind: ReportKind) => {
     setOpen(false);
-    const { lang, games, saves } = useStore.getState();
+    const { lang, game, games, saves } = useStore.getState();
     const diag = await invoke<Diagnostics>("diagnostics");
     const data: ReportContext["data"] = {};
     for (const g of GAMES) {
@@ -33,7 +33,7 @@ export function ReportMenu({ t }: { t: Strings }) {
         save: save?.progress ? "followed" : save?.error ? "unreadable" : save?.slots.length ? "not followed" : undefined,
       };
     }
-    await openUrl(issueUrl(kind, { diag, lang, data }));
+    await openUrl(issueUrl(kind, { diag, game, lang, data }));
   };
 
   return (

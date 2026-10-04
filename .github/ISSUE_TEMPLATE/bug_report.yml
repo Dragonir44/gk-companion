@@ -3,13 +3,39 @@ description: Quelque chose ne marche pas comme prévu. / Something doesn't work 
 title: "[Bug] "
 labels: [bug]
 body:
+  - type: dropdown
+    id: game
+    attributes:
+      label: Jeu concerné / Game
+      options:
+        - Graveyard Keeper
+        - Graveyard Keeper 2
+        - Les deux / Both
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Partie de l'app / App area
+      options:
+        - Planificateur (recherche, liste, matériaux) / Planner
+        - Arbre de recherche / Research tree
+        - Sauvegarde suivie / Save tracking
+        - Noms ou icônes / Names or icons
+        - Démarrage, détection du jeu / Startup, game detection
+        - Mise à jour de l'app / App update
+        - Autre / Other
   - type: textarea
     id: what-happened
     attributes:
       label: Que s'est-il passé ? / What happened?
-      description: Décris le problème, et ce que tu attendais à la place. / Describe the problem and what you expected instead.
+      description: Ce que tu as vu. / What you saw.
     validations:
       required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Qu'attendais-tu ? / What did you expect?
   - type: textarea
     id: steps
     attributes:
