@@ -49,6 +49,7 @@ export function ResearchTree() {
     return (b && n.text(b.name)?.replace(/\s+/g, " ")) || `#${id}`;
   };
   const techIcon = (x: Tech) => {
+    if (x.lock) return x.lock.portrait;
     if (x.icon) return x.icon;
     for (const u of x.unlocks) {
       const r = idx.recipes.get(u);
@@ -117,7 +118,7 @@ export function ResearchTree() {
               const cls = ["tech", x.lock ? "lock" : "", x.id === selected ? "selected" : path.has(x.id) ? "on-path" : "", visible(x) ? "" : "secret"];
               return (
                 <button key={x.id} className={cls.join(" ")} style={pos(x)} onClick={() => select(x.id)}>
-                  {visible(x) && <Icon sprite={techIcon(x)} size={28} />}
+                  {visible(x) && <Icon sprite={techIcon(x)} size={x.lock ? 40 : 28} />}
                   <span className="tech-body">
                     <span className="tech-name">{label(x)}</span>
                     <Points points={x.cost} />
@@ -160,12 +161,19 @@ function TechDetails(props: {
 
   return (
     <section className="panel tech-details">
-      <h2>{label(tech)}</h2>
+      <h2 className="tech-title">
+        {visible(tech) && tech.lock?.portrait && <Icon sprite={tech.lock.portrait} size={64} />}
+        {label(tech)}
+      </h2>
       <p className="muted small">{branchName(tech.branch)}</p>
       {desc && <p className="desc">{desc}</p>}
 
-      <h3>{t.cost}</h3>
-      <Points points={tech.cost} />
+      {Object.keys(tech.cost).length > 0 && (
+        <>
+          <h3>{t.cost}</h3>
+          <Points points={tech.cost} />
+        </>
+      )}
       {path.size > 1 && (
         <>
           <h3>{t.totalCost}</h3>

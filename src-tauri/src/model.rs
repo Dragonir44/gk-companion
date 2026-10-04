@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 /// Bump when the model changes, so stale caches are re-extracted.
-pub const MODEL_VERSION: u32 = 7;
+pub const MODEL_VERSION: u32 = 8;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -172,4 +172,7 @@ pub struct ReputationLock {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
     pub value: f64,
+    /// Portrait sprite of the character.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub portrait: Option<String>,
 }

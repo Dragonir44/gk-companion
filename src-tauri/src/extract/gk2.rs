@@ -1,6 +1,6 @@
 //! Graveyard Keeper 2: `GameBalance`.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use serde_json::Value;
 
@@ -59,10 +59,12 @@ fn outputs(v: Option<&Value>) -> Vec<Stack> {
         .collect()
 }
 
-fn reputation_lock(t: &Value, names: &mut Names) -> Option<ReputationLock> {
+/// Characters are world objects with the same id; they carry a portrait.
+fn reputation_lock(t: &Value, names: &mut Names, portraits: &HashMap<&str, &str>) -> Option<ReputationLock> {
     let rv = t.get("wgoRepLock").map(|l| list(l, "resValues")).unwrap_or(&[]).first()?;
     let npc = text(rv, "type").to_string();
-    Some(ReputationLock { name: names.exact(&npc), value: num(rv, "value"), npc })
+    let portrait = portraits.get(npc.as_str()).map(|p| p.to_string());
+    Some(ReputationLock { name: names.exact(&npc), value: num(rv, "value"), portrait, npc })
 }
 
 fn points(c: &Value) -> BTreeMap<String, f64> {
@@ -116,6 +118,11 @@ pub fn normalize(b: &Value, names: &mut Names) -> Normalized {
         });
     }
 
+    let portraits: HashMap<&str, &str> = list(b, "wgoDefs")
+        .iter()
+        .map(|w| (text(w, "id"), text(w, "portrait")))
+        .filter(|(_, p)| !p.is_empty())
+        .collect();
     let techs: Vec<Tech> = list(b, "techDefs")
         .iter()
         .map(|t| {
@@ -141,7 +148,7 @@ pub fn normalize(b: &Value, names: &mut Names) -> Normalized {
                 hidden: flag(t, "hiddenAtStart"),
                 icon: super::opt_text(t, "customIconId"),
                 lock: (t.get("techDefType").and_then(Value::as_i64) == Some(TECH_TYPE_REPUTATION_LOCK))
-                    .then(|| reputation_lock(t, names))
+                    .then(|| reputation_lock(t, names, &portraits))
                     .flatten(),
             }
         })

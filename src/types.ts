@@ -49,7 +49,7 @@ export interface Tech {
   hidden: boolean;
   icon?: string;
   /** Reputation gate rather than a research (gk2). */
-  lock?: { npc: string; name?: string; value: number };
+  lock?: { npc: string; name?: string; value: number; portrait?: string };
 }
 
 export interface Branch {

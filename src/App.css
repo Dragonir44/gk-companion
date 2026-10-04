@@ -645,3 +645,8 @@ button.link {
   background: transparent;
   border-style: dotted;
 }
+.tech-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}

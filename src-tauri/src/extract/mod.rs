@@ -170,6 +170,7 @@ pub fn extract(game: GameId, root: &Path) -> Result<Extracted, ExtractError> {
         resolve_icons(&mut n, set);
         let used = n.items.iter().chain(&n.objects).filter_map(|e| e.icon.clone());
         let used = used.chain(n.recipes.iter().filter_map(|r| r.icon.clone()));
+        let used = used.chain(n.techs.iter().flat_map(|t| [t.icon.clone(), t.lock.as_ref().and_then(|l| l.portrait.clone())]).flatten());
         icon_index.sprites = icons::referenced(set, used);
         icon_index.sheet_sizes = set.sheets.iter().map(|s| [s.width, s.height]).collect();
     }
@@ -234,6 +235,10 @@ fn resolve_icons(n: &mut Normalized, set: &icons::IconSet) {
     }
     for t in &mut n.techs {
         t.icon = t.icon.take().filter(|i| set.has(i));
+        if let Some(lock) = &mut t.lock {
+            let fallback = format!("portrait_icon_{}", lock.npc.trim_start_matches("npc_"));
+            lock.portrait = lock.portrait.take().into_iter().chain([fallback]).find(|p| set.has(p));
+        }
     }
 }
 
