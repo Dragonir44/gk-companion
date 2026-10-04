@@ -6,6 +6,7 @@ import type { Tech } from "../types";
 import { Points, useGame } from "./ctx";
 import { Icon } from "./Icon";
 import { RecipeLine } from "./Search";
+import { useDragScroll } from "./useDragScroll";
 
 const COL = 190;
 const ROW = 84;
@@ -37,6 +38,7 @@ export function ResearchTree() {
   const byId = useMemo(() => new Map(techs.map((x) => [x.id, x])), [techs]);
   const [branch, setBranch] = useState(branches[0]?.id ?? 0);
   const [selected, setSelected] = useState<string | null>(null);
+  const scrollRef = useDragScroll<HTMLDivElement>();
 
   const visible = (x: Tech) => showSpoilers || !x.hidden;
   const label = (x: Tech) => {
@@ -87,7 +89,7 @@ export function ResearchTree() {
             {t.showSpoilers}
           </label>
         </nav>
-        <div className="tree-scroll">
+        <div className="tree-scroll" ref={scrollRef}>
           <div className="tree-canvas" style={{ width, height }}>
             <svg width={width} height={height} className="edges">
               {inBranch.flatMap((child) =>

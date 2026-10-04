@@ -650,3 +650,11 @@ button.link {
   align-items: center;
   gap: 10px;
 }
+.tree-scroll {
+  cursor: grab;
+  user-select: none;
+}
+.tree-scroll.dragging,
+.tree-scroll.dragging .tech {
+  cursor: grabbing;
+}
