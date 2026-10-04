@@ -71,20 +71,26 @@ fn balance_object(game: GameId) -> &'static str {
     }
 }
 
-fn data_dir(root: &Path) -> Result<PathBuf, ExtractError> {
-    let entries = std::fs::read_dir(root)?;
-    for e in entries.flatten() {
-        let name = e.file_name();
-        if name.to_string_lossy().ends_with("_Data") && e.path().join("resources.assets").is_file() {
-            return Ok(e.path());
-        }
+/// Unity's data folder of a game install. `root` may be:
+/// - the install folder holding `<Game>_Data` (Windows, Linux);
+/// - the `.app` bundle itself (macOS: `Contents/Resources/Data`);
+/// - the install folder holding that `.app` (macOS Steam installs).
+pub fn data_dir(root: &Path) -> Result<PathBuf, ExtractError> {
+    let is_data = |p: &Path| p.join("resources.assets").is_file();
+    let mac = |app: &Path| app.join("Contents/Resources/Data");
+    if is_data(&mac(root)) {
+        return Ok(mac(root));
     }
-    // macOS bundles keep data under Contents/Resources/Data.
-    let mac = root.join("Contents/Resources/Data");
-    if mac.join("resources.assets").is_file() {
-        return Ok(mac);
+    let mut entries: Vec<PathBuf> = std::fs::read_dir(root)?.flatten().map(|e| e.path()).collect();
+    entries.sort();
+    let name_ends = |p: &Path, suffix: &str| p.file_name().is_some_and(|n| n.to_string_lossy().ends_with(suffix));
+    if let Some(d) = entries.iter().find(|p| name_ends(p, "_Data") && is_data(p)) {
+        return Ok(d.clone());
     }
-    Err(ExtractError::Missing(format!("no *_Data folder in {}", root.display())))
+    if let Some(app) = entries.iter().find(|p| name_ends(p, ".app") && is_data(&mac(p))) {
+        return Ok(mac(app));
+    }
+    Err(ExtractError::Missing(format!("no Unity data folder in {}", root.display())))
 }
 
 /// Changes whenever the files the extraction reads change. With a Steam
@@ -269,7 +275,32 @@ fn hide_test_content(recipes: &mut [Recipe]) {
 
 #[cfg(test)]
 mod tests {
-    use super::is_test;
+    use super::{data_dir, is_test};
+    use std::path::Path;
+
+    fn touch(p: &Path) {
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(p, b"").unwrap();
+    }
+
+    #[test]
+    fn finds_unity_data_on_every_layout() {
+        let base = std::env::temp_dir().join(format!("gkc-layouts-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        // Windows / Linux: <root>/<Game>_Data
+        touch(&base.join("win/GK_Data/resources.assets"));
+        assert_eq!(data_dir(&base.join("win")).unwrap(), base.join("win/GK_Data"));
+        // macOS Steam install: <root>/<Game>.app/Contents/Resources/Data
+        touch(&base.join("mac/Graveyard Keeper.app/Contents/Resources/Data/resources.assets"));
+        let mac_data = base.join("mac/Graveyard Keeper.app/Contents/Resources/Data");
+        assert_eq!(data_dir(&base.join("mac")).unwrap(), mac_data);
+        // macOS, the .app itself chosen by hand
+        assert_eq!(data_dir(&base.join("mac/Graveyard Keeper.app")).unwrap(), mac_data);
+        // Anything else
+        std::fs::create_dir_all(base.join("empty")).unwrap();
+        assert!(data_dir(&base.join("empty")).is_err());
+        let _ = std::fs::remove_dir_all(&base);
+    }
 
     #[test]
     fn detects_test_ids() {

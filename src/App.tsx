@@ -10,7 +10,7 @@ import { Results } from "./components/Results";
 import { SaveSelector } from "./components/SaveSelector";
 import { Search } from "./components/Search";
 import { UpdateBanner } from "./components/UpdateBanner";
-import { fmt, LANGUAGES, strings } from "./i18n";
+import { fmt, LANGUAGES, strings, type Strings } from "./i18n";
 import { namer } from "./names";
 import { unlockedBy, unlocks } from "./progress";
 import { useStore } from "./store";
@@ -18,6 +18,44 @@ import { GAMES } from "./types";
 import "./App.css";
 
 const SAVE_POLL_MS = 4000;
+
+/** Game folder in the status bar: change it, or go back to detection. */
+function FolderMenu(props: { t: Strings; path?: string; manual: boolean; onChoose(): void; onReset(): void }) {
+  const { t, path, manual, onChoose, onReset } = props;
+  const [open, setOpen] = useState(false);
+  return (
+    <span className="folder-menu">
+      <button className="link-btn" onClick={() => setOpen((o) => !o)} title={path} aria-expanded={open}>
+        {manual && `${t.manualFolder} · `}
+        {path ?? t.chooseFolder}
+      </button>
+      {open && (
+        <span className="menu up" role="menu" onMouseLeave={() => setOpen(false)}>
+          <button
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              onChoose();
+            }}
+          >
+            {t.changeFolder}
+          </button>
+          {manual && (
+            <button
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                onReset();
+              }}
+            >
+              {t.resetFolder}
+            </button>
+          )}
+        </span>
+      )}
+    </span>
+  );
+}
 
 function useAppVersion(): string | undefined {
   const [version, setVersion] = useState<string>();
@@ -167,7 +205,14 @@ export default function App() {
               {" · "}
               {fmt(t.recipesCount, { n: ctx.idx.data.recipes.length })}
               {ctx.idx.data.gameBuild && ` · ${fmt(t.gameBuild, { build: ctx.idx.data.gameBuild })}`}
-              {status?.install && <span title={status.install.root}> · {status.install.root}</span>}
+              {" · "}
+              <FolderMenu
+                t={t}
+                path={status?.install?.root}
+                manual={!!status?.manual}
+                onChoose={chooseFolder}
+                onReset={() => void setGamePath(game, null)}
+              />
             </span>
             {appVersion && <span className="app-version">GK Companion v{appVersion}</span>}
           </footer>

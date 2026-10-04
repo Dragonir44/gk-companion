@@ -17,8 +17,10 @@ Download from the [releases](https://github.com/Dragonir44/gk-companion/releases
   Gear Lever), or the `.deb` / `.rpm`.
 - **Windows**: the `-setup.exe`. The build is not code-signed, so SmartScreen
   may warn: *More info → Run anyway*.
-- **macOS**: the `.dmg` (Apple Silicon and Intel). Not notarized: right-click
-  the app → *Open* the first time.
+- **macOS** (*experimental, untested: no Mac available — feedback welcome*):
+  the `.dmg` (Apple Silicon and Intel). The app is not notarized: on first
+  launch macOS blocks it; open *System Settings → Privacy & Security* and
+  click *Open Anyway* (or run `xattr -dr com.apple.quarantine "/Applications/GK Companion.app"`).
 
 Updates are offered inside the app (AppImage, Windows, macOS; deb/rpm when
 signed packages are published) and installed in place.
@@ -26,8 +28,9 @@ signed packages are published) and installed in place.
 Found a bug or have an idea? Use **Report** in the app: it opens a GitHub
 issue form prefilled with the app version, OS and game builds.
 
-The game must be installed: the app finds it through Steam (or you pick its
-folder) and reads everything from there. It also follows your latest save.
+The game must be installed: the app finds it in your Steam libraries, or you
+pick its folder (click the folder in the status bar; on macOS, the folder
+holding the game's `.app`, or the `.app` itself). It reads everything from there. It also follows your latest save.
 
 ## How it works
 

@@ -65,10 +65,10 @@ pub fn supported(game: GameId) -> bool {
     matches!(game, GameId::Gk1 | GameId::Gk2)
 }
 
-/// Company and product names from `<Game>_Data/app.info`: they name the
-/// save folder (`LocalLow/<company>/<product>`).
+/// Company and product names from the data folder's `app.info`: they name
+/// the save folder (`LocalLow/<company>/<product>`).
 fn app_info(root: &Path) -> Option<(String, String)> {
-    let data = std::fs::read_dir(root).ok()?.flatten().map(|e| e.path()).find(|p| p.join("app.info").is_file())?;
+    let data = crate::extract::data_dir(root).ok()?;
     let text = std::fs::read_to_string(data.join("app.info")).ok()?;
     let mut lines = text.lines().map(str::trim);
     Some((lines.next()?.to_string(), lines.next()?.to_string()))

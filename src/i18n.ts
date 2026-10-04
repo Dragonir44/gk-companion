@@ -92,6 +92,8 @@ const fr = {
   reportBug: "Signaler un bug",
   reportFeature: "Proposer une idée",
   reportHint: "Ouvre un formulaire GitHub pré-rempli (compte GitHub requis).",
+  changeFolder: "Changer le dossier du jeu…",
+  manualFolder: "dossier choisi",
 } as const;
 
 export type Strings = { [K in keyof typeof fr]: string };
@@ -187,6 +189,8 @@ const en: Strings = {
   reportBug: "Report a bug",
   reportFeature: "Suggest a feature",
   reportHint: "Opens a prefilled GitHub form (GitHub account needed).",
+  changeFolder: "Change the game folder…",
+  manualFolder: "chosen folder",
 };
 
 const UI: Record<string, Strings> = { fr, en };

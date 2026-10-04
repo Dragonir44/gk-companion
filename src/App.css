@@ -804,3 +804,55 @@ button.link {
 .topbar .lang {
   margin-left: 0;
 }
+
+.folder-menu {
+  position: relative;
+}
+.link-btn {
+  border: none;
+  background: none;
+  padding: 0;
+  color: inherit;
+  font-size: inherit;
+  text-decoration: underline dotted;
+  cursor: pointer;
+}
+.link-btn:hover {
+  color: var(--accent);
+}
+.folder-menu .menu {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 6px);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 220px;
+  padding: 6px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 35%);
+}
+.folder-menu .menu button {
+  text-align: left;
+  color: var(--text);
+}
+/* The folder menu opens above the status bar: nothing may clip it; long
+   paths are truncated on the button instead. */
+.statusbar,
+.status-left {
+  overflow: visible;
+}
+.status-left {
+  white-space: nowrap;
+}
+.folder-menu .link-btn {
+  display: inline-block;
+  max-width: 45vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}

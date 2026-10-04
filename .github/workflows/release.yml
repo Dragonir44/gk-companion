@@ -76,6 +76,12 @@ jobs:
       - run: npm ci
       - run: npm test
 
+      # Rust tests on every OS: the only check macOS gets (no Mac to try
+      # the app on). The Tauri crate embeds the built frontend.
+      - name: Rust tests
+        shell: bash
+        run: npm run build && cargo test --manifest-path src-tauri/Cargo.toml
+
       - name: Build
         shell: bash
         env:
