@@ -4,6 +4,7 @@ mod expr;
 mod gk1;
 mod gk2;
 pub mod icons;
+mod map;
 mod names;
 
 use std::collections::{BTreeMap, HashMap};
@@ -217,11 +218,16 @@ pub fn extract(game: GameId, root: &Path, build_id: Option<&str>) -> Result<Extr
         Err(e) => (None, Some(e.to_string())),
     };
     let mut icon_index = crate::model::IconIndex::default();
+    let world_map = icon_set.as_ref().and_then(|s| s.map.clone());
+    if let Some(err) = icon_set.as_ref().and_then(|s| s.map_error.as_ref()) {
+        eprintln!("map of {}: {err}", game.as_str());
+    }
     if let Some(set) = &icon_set {
         resolve_icons(&mut n, set);
         let used = n.items.iter().chain(&n.objects).filter_map(|e| e.icon.clone());
         let used = used.chain(n.recipes.iter().filter_map(|r| r.icon.clone()));
         let used = used.chain(n.techs.iter().flat_map(|t| [t.icon.clone(), t.lock.as_ref().and_then(|l| l.portrait.clone())]).flatten());
+        let used = used.chain(world_map.iter().map(|m| m.sprite.clone()));
         icon_index.sprites = icons::referenced(set, used);
         icon_index.sheet_sizes = set.sheets.iter().map(|s| [s.width, s.height]).collect();
     }
@@ -242,6 +248,7 @@ pub fn extract(game: GameId, root: &Path, build_id: Option<&str>) -> Result<Extr
         locales: names.filter_locales(locales),
         icons: icon_index,
         alchemy_mixes: n.alchemy_mixes,
+        map: world_map,
     };
     Ok(Extracted { data, icons: icon_set, icons_error })
 }

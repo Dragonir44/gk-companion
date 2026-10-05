@@ -1,10 +1,12 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { fmt } from "../i18n";
 import { useStore } from "../store";
 import type { Recipe, WorldObject } from "../types";
+import { type MapPoint, placeOnMap } from "../worldmap";
 import { useGame } from "./ctx";
 import { Icon } from "./Icon";
+import { type Landmark, MapPanel, type Marker } from "./MapPanel";
 import { LockBadge } from "./Search";
 
 /** Objects with no zone are placed by their nearest zoned neighbour. */
@@ -17,7 +19,12 @@ interface Site {
   /** Zone id, and whether it was guessed from a neighbour. */
   zone?: string;
   near: boolean;
+  /** On the game's map, and the number shown on it. */
+  at?: MapPoint;
+  num?: number;
 }
+
+const TELEPORT = /^teleport_milestone_\d+_/;
 
 /** Construction sites left in the save (repairs, blockages, town plots), by zone. */
 export function SitesView() {
@@ -31,6 +38,11 @@ export function SitesView() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [target, setTarget] = useState<string>(activeId ?? "");
   const [done, setDone] = useState<string | null>(null);
+  // Site under the pointer in the list, and the one picked (map or list).
+  const [hovered, setHovered] = useState<string>();
+  const [focused, setFocused] = useState<string>();
+  const cards = useRef(new Map<string, HTMLDivElement>());
+  const map = idx.data.map;
 
   const sites = useMemo(() => {
     const byStation = new Map<string, Recipe[]>();
@@ -53,9 +65,10 @@ export function SitesView() {
       .filter((o) => byStation.has(o.id))
       .map((o, i): Site => {
         const guess = o.zone ? undefined : nearest(o);
-        return { key: `${i}`, object: o, recipes: byStation.get(o.id)!, zone: o.zone ?? guess, near: !o.zone && !!guess };
+        const at = map ? placeOnMap(map, o) : undefined;
+        return { key: `${i}`, object: o, recipes: byStation.get(o.id)!, zone: o.zone ?? guess, near: !o.zone && !!guess, at };
       });
-  }, [idx, progress]);
+  }, [idx, progress, map]);
 
   const zoneName = (z?: string) => {
     const e = z ? idx.data.zones?.find((x) => x.id === z) : undefined;
@@ -70,8 +83,62 @@ export function SitesView() {
       m.set(label, [...(m.get(label) ?? []), s]);
     }
     for (const g of m.values()) g.sort((a, b) => a.object.pos[0] - b.object.pos[0]);
-    return [...m].sort((a, b) => a[0].localeCompare(b[0]));
+    const sorted = [...m].sort((a, b) => a[0].localeCompare(b[0]));
+    // Numbered in list order, so the map reads alongside the list.
+    let num = 0;
+    for (const [, list] of sorted) for (const s of list) s.num = s.at ? ++num : undefined;
+    return sorted;
   }, [sites, t, n, idx]);
+
+  // Sites sharing a point (an interior's) share a marker.
+  const markerOf = useMemo(() => {
+    const byPoint = new Map<string, Site[]>();
+    for (const [, list] of groups) {
+      for (const s of list) {
+        if (!s.at) continue;
+        const k = s.at.map((v) => v.toFixed(4)).join(",");
+        byPoint.set(k, [...(byPoint.get(k) ?? []), s]);
+      }
+    }
+    const of = new Map<string, Site[]>();
+    for (const members of byPoint.values()) for (const s of members) of.set(s.key, members);
+    return of;
+  }, [groups]);
+  const markers: Marker[] = useMemo(() => {
+    const seen = new Set<Site[]>();
+    const out: Marker[] = [];
+    for (const members of markerOf.values()) {
+      if (seen.has(members)) continue;
+      seen.add(members);
+      const [first] = members;
+      out.push({
+        key: first.key,
+        at: first.at!,
+        label: members.length > 1 ? `${first.num}+${members.length - 1}` : `${first.num}`,
+        title: members.map((s) => `${s.num}. ${n.name(s.object.id)}`).join("\n"),
+        selected: members.some((s) => [...selected].some((k) => k.startsWith(`${s.key}|`))),
+      });
+    }
+    return out;
+  }, [markerOf, selected, n]);
+  const landmarks: Landmark[] = useMemo(() => {
+    if (!map) return [];
+    return (progress?.objects ?? []).flatMap((o) => {
+      if (!TELEPORT.test(o.id)) return [];
+      const at = placeOnMap(map, o);
+      if (!at) return [];
+      const zone = o.id.replace(TELEPORT, "");
+      const e = idx.data.zones?.find((z) => z.id === zone);
+      const name = (e && n.text(e.name)) || zone.replace(/_/g, " ");
+      return [{ at, title: `${t.mapTeleport} · ${name}` }];
+    });
+  }, [map, progress, idx, n, t]);
+  const markerKey = (site?: string) => (site ? markerOf.get(site)?.[0].key : undefined);
+
+  // A site picked on the map: bring its card into view.
+  useEffect(() => {
+    if (focused) cards.current.get(focused)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [focused]);
 
   if (!progress?.objects?.length) return <section className="panel sites-view muted center-text">{t.sitesNone}</section>;
 
@@ -97,6 +164,16 @@ export function SitesView() {
   return (
     <section className="panel sites-view">
       <p className="muted small">{t.sitesIntro}</p>
+      <div className={map ? "sites-split" : "sites-split no-map"}>
+      {map && (
+        <MapPanel
+          markers={markers}
+          landmarks={landmarks}
+          focused={markerKey(focused)}
+          hovered={markerKey(hovered)}
+          onPick={setFocused}
+        />
+      )}
       <div className="sites-body">
         {groups.map(([label, list]) => (
           <div key={label} className="sites-group">
@@ -105,8 +182,27 @@ export function SitesView() {
             </h3>
             <div className="sites-grid">
               {list.map((site) => (
-                <div key={site.key} className="site">
+                <div
+                  key={site.key}
+                  className={site.key === focused ? "site focus" : "site"}
+                  ref={(el) => {
+                    if (el) cards.current.set(site.key, el);
+                    else cards.current.delete(site.key);
+                  }}
+                  onMouseEnter={() => setHovered(site.key)}
+                  onMouseLeave={() => setHovered(undefined)}
+                >
                   <div className="site-head">
+                    {map &&
+                      (site.num ? (
+                        <button className="site-num" title={t.mapShow} onClick={() => setFocused(site.key)}>
+                          {site.num}
+                        </button>
+                      ) : (
+                        <span className="site-num off" title={t.mapNotOnMap}>
+                          ?
+                        </span>
+                      ))}
                     <Icon sprite={n.icon(site.object.id)} size={22} />
                     <strong>{n.name(site.object.id)}</strong>
                     {site.near && <span className="muted small">({t.sitesNearHint})</span>}
@@ -137,6 +233,7 @@ export function SitesView() {
             </div>
           </div>
         ))}
+      </div>
       </div>
       <footer className="sites-bar">
         <span>{fmt(t.sitesSelected, { n: selected.size })}</span>

@@ -87,6 +87,18 @@ export interface GameData {
   icons: IconIndex;
   /** Alchemy recipe id -> mixes that make it. */
   alchemyMixes?: Record<string, Mix[]>;
+  /** The in-game world map (gk2). */
+  map?: WorldMap;
+}
+
+export interface WorldMap {
+  /** Sprite of the map image in the icon sheets. */
+  sprite: string;
+  /** Ground rectangle [x, z] the image covers. */
+  worldMin: [number, number];
+  worldMax: [number, number];
+  /** Interior zone -> fixed point on the image, fractions from top-left. */
+  zones: Record<string, [number, number]>;
 }
 
 export interface IconIndex {

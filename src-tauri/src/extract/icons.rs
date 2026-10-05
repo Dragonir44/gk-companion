@@ -13,8 +13,8 @@ use serde_json::Value;
 
 use super::ExtractError;
 use crate::model::GameId;
-use crate::unity::bundle::Bundle;
-use crate::unity::serialized::{self, ObjectInfo, SerializedFile, CLASS_SPRITE, CLASS_SPRITE_ATLAS, CLASS_TEXTURE2D};
+use crate::unity::bundle::{Bundle, BundleNode};
+use crate::unity::serialized::{self, ObjectInfo, SerializedFile, SerializedType, CLASS_SPRITE, CLASS_SPRITE_ATLAS, CLASS_TEXTURE2D};
 use crate::unity::typetree::{self, Schema};
 use crate::unity::UnityError;
 
@@ -52,6 +52,9 @@ pub struct Rect {
 pub struct IconSet {
     pub sheets: Vec<Sheet>,
     pub sprites: HashMap<String, Rect>,
+    /// The world map, its image being one of the sheets (gk2).
+    pub map: Option<crate::model::WorldMap>,
+    pub map_error: Option<String>,
 }
 
 impl IconSet {
@@ -78,21 +81,21 @@ impl IconSet {
 }
 
 /// Where a texture's pixels live when streamed out of the object.
-enum StreamSource<'a> {
+pub(super) enum StreamSource<'a> {
     /// gk1: `.resS` files next to the assets.
     Dir(&'a Path),
     /// gk2: `.resS` nodes of the same bundle.
     Bundle(&'a Bundle),
 }
 
-struct Ctx<'a> {
-    file: &'a SerializedFile,
-    schema: &'a Schema,
-    streams: StreamSource<'a>,
+pub(super) struct Ctx<'a> {
+    pub file: &'a SerializedFile,
+    pub schema: &'a Schema,
+    pub streams: StreamSource<'a>,
 }
 
 impl Ctx<'_> {
-    fn decode(&self, obj: &ObjectInfo) -> Result<Value, ExtractError> {
+    pub fn decode(&self, obj: &ObjectInfo) -> Result<Value, ExtractError> {
         let raw = self.file.read_object(obj)?;
         let class = self.file.class_id(obj);
         let what = format!("class {class} object {}", obj.path_id);
@@ -109,7 +112,7 @@ impl Ctx<'_> {
         Ok(v)
     }
 
-    fn object(&self, pptr: &Value) -> Result<&ObjectInfo, ExtractError> {
+    pub fn object(&self, pptr: &Value) -> Result<&ObjectInfo, ExtractError> {
         if pptr.get("m_FileID").and_then(Value::as_i64) != Some(0) {
             return Err(ExtractError::Icons("reference to another file".into()));
         }
@@ -136,7 +139,8 @@ impl Ctx<'_> {
         }
     }
 
-    fn texture(&self, obj: &ObjectInfo) -> Result<Sheet, ExtractError> {
+    /// Decodes a texture; `icon` applies the icon outline colour.
+    pub fn texture(&self, obj: &ObjectInfo, icon: bool) -> Result<Sheet, ExtractError> {
         let t = self.decode(obj)?;
         let width = t.get("m_Width").and_then(Value::as_u64).unwrap_or(0) as u32;
         let height = t.get("m_Height").and_then(Value::as_u64).unwrap_or(0) as u32;
@@ -167,7 +171,7 @@ impl Ctx<'_> {
                 // Leftover colour in transparent pixels bleeds into edges
                 // when scaled: clear it.
                 px.copy_from_slice(&[0, 0, 0, 0]);
-            } else if px[..3] == OUTLINE_KEY {
+            } else if icon && px[..3] == OUTLINE_KEY {
                 px[..3].copy_from_slice(&OUTLINE);
             }
         }
@@ -198,7 +202,7 @@ impl Ctx<'_> {
             let sheet = match sheet_of.get(&tex_id) {
                 Some(&s) => s,
                 None => {
-                    set.sheets.push(self.texture(self.object(&tex_ref)?)?);
+                    set.sheets.push(self.texture(self.object(&tex_ref)?, true)?);
                     sheet_of.insert(tex_id, set.sheets.len() - 1);
                     set.sheets.len() - 1
                 }
@@ -229,8 +233,9 @@ pub fn load(game: GameId, data: &Path, schema: &Schema) -> Result<IconSet, Extra
             }
         }
         GameId::Gk2 => {
-            for path in atlas_bundles(data, schema)? {
-                let bundle = Bundle::open(&path)?;
+            let scan = scan_bundles(data, schema)?;
+            for path in &scan.atlases {
+                let bundle = Bundle::open(path)?;
                 let node = bundle.serialized_node().ok_or_else(|| ExtractError::Icons("bundle without file".into()))?;
                 let bytes = Arc::new(bundle.read_node(node, None)?);
                 let file = SerializedFile::from_bytes(bytes, Some(&schema.common_strings))?;
@@ -238,6 +243,18 @@ pub fn load(game: GameId, data: &Path, schema: &Schema) -> Result<IconSet, Extra
                 for obj in file.objects_of(CLASS_SPRITE_ATLAS) {
                     ctx.add_atlas(obj, &mut set)?;
                 }
+            }
+            if set.sprites.is_empty() {
+                return Err(ExtractError::Icons("no icon atlas found".into()));
+            }
+            match super::map::load(&scan, schema) {
+                Ok((sheet, map)) => {
+                    let (w, h) = (sheet.width, sheet.height);
+                    set.sheets.push(sheet);
+                    set.sprites.insert(map.sprite.clone(), Rect { sheet: set.sheets.len() - 1, x: 0, y: 0, w, h });
+                    set.map = Some(map);
+                }
+                Err(e) => set.map_error = Some(e.to_string()),
             }
         }
     }
@@ -247,50 +264,111 @@ pub fn load(game: GameId, data: &Path, schema: &Schema) -> Result<IconSet, Extra
     Ok(set)
 }
 
-/// Addressables bundles that contain a sprite atlas (gk2).
-fn atlas_bundles(data: &Path, schema: &Schema) -> Result<Vec<PathBuf>, ExtractError> {
+/// What a scan of the Addressables bundles found (gk2).
+#[derive(Default)]
+pub struct BundleScan {
+    /// Bundles holding a sprite atlas.
+    pub atlases: Vec<PathBuf>,
+    /// Bundles of the map window prefabs (have `worldZonePoints`).
+    pub map_pages: Vec<PathBuf>,
+    /// Bundle of the main scene, and its scene file's node.
+    pub main_scene: Option<(PathBuf, String)>,
+    /// Bundle by the name of its serialized file (`CAB-<hash>`), to follow
+    /// references between bundles.
+    pub by_cab: HashMap<String, PathBuf>,
+}
+
+/// Interesting parts of one bundle, from its directory and metadata.
+#[derive(Default)]
+struct Peek {
+    atlas: bool,
+    map_page: bool,
+    /// Scene file node, when it is the main scene.
+    main_scene: Option<String>,
+    cab: Option<String>,
+}
+
+/// Field of the map window's behaviour, unique to it.
+const MAP_PAGE_FIELD: &str = "worldZonePoints";
+/// Field of the main scene's UI root (world bounds of the map).
+const MAIN_SCENE_FIELD: &str = "worldMin";
+/// Scene bundles hold `CAB-<hash>` (the scene) and `CAB-<hash>.sharedAssets`.
+const SHARED_ASSETS: &str = ".sharedAssets";
+
+/// Scans the Addressables bundles (gk2) for atlases and the map's parts.
+pub fn scan_bundles(data: &Path, schema: &Schema) -> Result<BundleScan, ExtractError> {
     let aa = data.join("StreamingAssets/aa");
     let platform = std::fs::read_dir(&aa)?
         .flatten()
         .map(|e| e.path())
         .find(|p| p.is_dir() && p.file_name().is_some_and(|n| n != "AddressablesLink"))
         .ok_or_else(|| ExtractError::Missing("Addressables bundles".into()))?;
-    let bundles: Vec<PathBuf> = std::fs::read_dir(&platform)?
+    let mut bundles: Vec<PathBuf> = std::fs::read_dir(&platform)?
         .flatten()
         .map(|e| e.path())
         .filter(|p| p.extension().is_some_and(|e| e == "bundle"))
         .collect();
+    bundles.sort();
     // Tens of thousands of small reads: spread them over a few threads.
     let workers = std::thread::available_parallelism().map_or(4, |n| n.get()).min(MAX_SCAN_THREADS);
     let chunk = bundles.len().div_ceil(workers).max(1);
-    let mut found: Vec<PathBuf> = std::thread::scope(|scope| {
+    let peeks: Vec<(PathBuf, Peek)> = std::thread::scope(|scope| {
         let handles: Vec<_> = bundles
             .chunks(chunk)
-            .map(|part| scope.spawn(move || part.iter().filter(|p| has_atlas(p, schema).unwrap_or(false)).cloned().collect::<Vec<_>>()))
+            .map(|part| scope.spawn(move || part.iter().map(|p| (p.clone(), peek(p, schema).unwrap_or_default())).collect::<Vec<_>>()))
             .collect();
         handles.into_iter().flat_map(|h| h.join().unwrap_or_default()).collect()
     });
-    found.sort();
-    Ok(found)
+    let mut scan = BundleScan::default();
+    for (path, p) in peeks {
+        if p.atlas {
+            scan.atlases.push(path.clone());
+        }
+        if p.map_page {
+            scan.map_pages.push(path.clone());
+        }
+        if let Some(node) = p.main_scene {
+            scan.main_scene = Some((path.clone(), node));
+        }
+        if let Some(cab) = p.cab {
+            scan.by_cab.insert(cab, path);
+        }
+    }
+    Ok(scan)
 }
 
-/// Checks a bundle's type table without decompressing all of it.
-fn has_atlas(path: &Path, schema: &Schema) -> Result<bool, UnityError> {
+/// Reads a bundle's directory and type table without decompressing it all.
+fn peek(path: &Path, schema: &Schema) -> Result<Peek, UnityError> {
     use std::io::Read;
     let mut head = Vec::with_capacity(BUNDLE_PEEK);
     std::fs::File::open(path)?.take(BUNDLE_PEEK as u64).read_to_end(&mut head)?;
-    let peek = |raw: Vec<u8>| -> Result<bool, UnityError> {
+    let read = |raw: Vec<u8>| -> Result<Peek, UnityError> {
         let b = Bundle::parse(raw)?;
-        let Some(node) = b.serialized_node() else { return Ok(false) };
-        let start = b.read_node(node, Some(48))?;
-        let meta = b.read_node(node, Some(serialized::metadata_len(&start)? as u64))?;
-        let ids = serialized::peek_class_ids(&meta, Some(&schema.common_strings))?;
-        Ok(ids.contains(&CLASS_SPRITE_ATLAS) && ids.contains(&CLASS_SPRITE) && ids.contains(&CLASS_TEXTURE2D))
+        let types_of = |node: &BundleNode| -> Result<Vec<SerializedType>, UnityError> {
+            let start = b.read_node(node, Some(48))?;
+            let meta = b.read_node(node, Some(serialized::metadata_len(&start)? as u64))?;
+            serialized::peek_types(&meta, Some(&schema.common_strings))
+        };
+        let has_field = |types: &[SerializedType], field: &str| {
+            types.iter().any(|t| t.tree.as_ref().is_some_and(|tree| tree.iter().any(|n| n.0 == field)))
+        };
+        // A scene bundle: the scene file is the shared assets' twin.
+        let scene = b.nodes.iter().find_map(|n| b.node(n.path.strip_suffix(SHARED_ASSETS)?));
+        if let Some(scene) = scene {
+            let main = has_field(&types_of(scene)?, MAIN_SCENE_FIELD).then(|| scene.path.clone());
+            return Ok(Peek { main_scene: main, cab: Some(scene.path.clone()), ..Default::default() });
+        }
+        let Some(node) = b.serialized_node() else { return Ok(Peek::default()) };
+        let types = types_of(node)?;
+        let has = |c: i32| types.iter().any(|t| t.class_id == c);
+        let atlas = has(CLASS_SPRITE_ATLAS) && has(CLASS_SPRITE) && has(CLASS_TEXTURE2D);
+        let map_page = has_field(&types, MAP_PAGE_FIELD);
+        Ok(Peek { atlas, map_page, main_scene: None, cab: Some(node.path.clone()) })
     };
-    match peek(head) {
+    match read(head) {
         Ok(v) => Ok(v),
         // Directory or metadata beyond the peeked bytes: read it all.
-        Err(_) => peek(std::fs::read(path)?),
+        Err(_) => read(std::fs::read(path)?),
     }
 }
 

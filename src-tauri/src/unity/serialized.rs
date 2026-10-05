@@ -14,6 +14,8 @@ use std::sync::Arc;
 use super::typetree::Node;
 use super::UnityError;
 
+pub const CLASS_GAMEOBJECT: i32 = 1;
+pub const CLASS_TRANSFORM: i32 = 4;
 pub const CLASS_MONOBEHAVIOUR: i32 = 114;
 pub const CLASS_TEXTURE2D: i32 = 28;
 pub const CLASS_SPRITE: i32 = 213;
@@ -49,6 +51,9 @@ pub struct SerializedFile {
     pub unity_version: String,
     pub types: Vec<SerializedType>,
     pub objects: Vec<ObjectInfo>,
+    /// Other files this one references: a PPtr's `m_FileID` n is
+    /// `externals[n - 1]` (bundles: `archive:/CAB-<hash>/CAB-<hash>`).
+    pub externals: Vec<String>,
     data_offset: u64,
 }
 
@@ -190,7 +195,14 @@ fn parse_tree(c: &mut Cursor, common: Option<&CommonStrings>) -> Result<Vec<Node
     Ok(nodes)
 }
 
-fn parse_metadata(buf: &[u8], common: Option<&CommonStrings>) -> Result<(String, Vec<SerializedType>, Vec<ObjectInfo>), UnityError> {
+struct Metadata {
+    unity_version: String,
+    types: Vec<SerializedType>,
+    objects: Vec<ObjectInfo>,
+    externals: Vec<String>,
+}
+
+fn parse_metadata(buf: &[u8], common: Option<&CommonStrings>) -> Result<Metadata, UnityError> {
     let h = parse_header(buf)?;
     let mut c = Cursor { buf, pos: HEADER_SIZE, little: h.little };
 
@@ -232,14 +244,29 @@ fn parse_metadata(buf: &[u8], common: Option<&CommonStrings>) -> Result<(String,
         }
         objects.push(ObjectInfo { path_id, byte_start, byte_size, type_index });
     }
-    Ok((unity_version, types, objects))
+
+    // Script references (file index, aligned local id), then externals.
+    let script_count = c.i32()?;
+    for _ in 0..script_count {
+        c.i32()?;
+        c.align4();
+        c.i64()?;
+    }
+    let external_count = c.i32()?;
+    let mut externals = Vec::with_capacity(external_count.max(0) as usize);
+    for _ in 0..external_count {
+        let _temp_empty = c.cstring()?;
+        let _guid = c.bytes16()?;
+        let _kind = c.i32()?;
+        externals.push(c.cstring()?);
+    }
+    Ok(Metadata { unity_version, types, objects, externals })
 }
 
 /// Class ids of the types in a file, from its metadata alone. Lets bundle
 /// scans skip files without decompressing them whole.
-pub fn peek_class_ids(head: &[u8], common: Option<&CommonStrings>) -> Result<Vec<i32>, UnityError> {
-    let (_, types, _) = parse_metadata(head, common)?;
-    Ok(types.iter().map(|t| t.class_id).collect())
+pub fn peek_types(head: &[u8], common: Option<&CommonStrings>) -> Result<Vec<SerializedType>, UnityError> {
+    Ok(parse_metadata(head, common)?.types)
 }
 
 impl SerializedFile {
@@ -250,15 +277,29 @@ impl SerializedFile {
         let mut buf = vec![0u8; metadata_len(&head)?];
         f.seek(SeekFrom::Start(0))?;
         f.read_exact(&mut buf)?;
-        let (unity_version, types, objects) = parse_metadata(&buf, None)?;
+        let m = parse_metadata(&buf, None)?;
         let data_offset = parse_header(&head)?.data_offset;
-        Ok(Self { backing: Backing::File(path.to_path_buf()), unity_version, types, objects, data_offset })
+        Ok(Self {
+            backing: Backing::File(path.to_path_buf()),
+            unity_version: m.unity_version,
+            types: m.types,
+            objects: m.objects,
+            externals: m.externals,
+            data_offset,
+        })
     }
 
     pub fn from_bytes(data: Arc<Vec<u8>>, common: Option<&CommonStrings>) -> Result<Self, UnityError> {
-        let (unity_version, types, objects) = parse_metadata(&data, common)?;
+        let m = parse_metadata(&data, common)?;
         let data_offset = parse_header(&data)?.data_offset;
-        Ok(Self { backing: Backing::Memory(data), unity_version, types, objects, data_offset })
+        Ok(Self {
+            backing: Backing::Memory(data),
+            unity_version: m.unity_version,
+            types: m.types,
+            objects: m.objects,
+            externals: m.externals,
+            data_offset,
+        })
     }
 
     pub fn class_id(&self, obj: &ObjectInfo) -> i32 {
@@ -267,6 +308,11 @@ impl SerializedFile {
 
     pub fn tree(&self, obj: &ObjectInfo) -> Option<&Arc<Vec<Node>>> {
         self.types[obj.type_index].tree.as_ref()
+    }
+
+    /// Whether the object's embedded typetree has a field named `field`.
+    pub fn has_field(&self, obj: &ObjectInfo, field: &str) -> bool {
+        self.tree(obj).is_some_and(|t| t.iter().any(|n| n.0 == field))
     }
 
     pub fn object(&self, path_id: i64) -> Option<&ObjectInfo> {

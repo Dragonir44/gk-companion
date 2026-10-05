@@ -8,7 +8,7 @@ const DRAG_THRESHOLD = 4;
  * and scroll it sideways with the mouse wheel. A drag swallows the click
  * that ends it, so dragging from a node does not select it.
  */
-export function useDragScroll<T extends HTMLElement>() {
+export function useDragScroll<T extends HTMLElement>({ sidewaysWheel = true } = {}) {
   const ref = useRef<T>(null);
 
   useEffect(() => {
@@ -51,7 +51,7 @@ export function useDragScroll<T extends HTMLElement>() {
     };
     const wheel = (e: WheelEvent) => {
       // Trackpads already scroll sideways; only map plain vertical wheels.
-      if (e.ctrlKey || e.deltaX !== 0 || el.scrollWidth <= el.clientWidth) return;
+      if (!sidewaysWheel || e.ctrlKey || e.deltaX !== 0 || el.scrollWidth <= el.clientWidth) return;
       e.preventDefault();
       el.scrollLeft += e.deltaMode === WheelEvent.DOM_DELTA_LINE ? e.deltaY * 32 : e.deltaY;
     };
@@ -70,7 +70,7 @@ export function useDragScroll<T extends HTMLElement>() {
       el.removeEventListener("click", click, true);
       el.removeEventListener("wheel", wheel);
     };
-  }, []);
+  }, [sidewaysWheel]);
 
   return ref;
 }

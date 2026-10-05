@@ -4,7 +4,7 @@ import { useStore } from "../store";
 import { useGame } from "./ctx";
 
 /** URL of an icon sheet: through Tauri's asset protocol, or the dev server in mock mode. */
-function sheetUrl(dir: string, file: string): string {
+export function sheetUrl(dir: string, file: string): string {
   if ((window as unknown as { __GK_MOCK__?: boolean }).__GK_MOCK__) return `${dir}/${file}`;
   const sep = dir.includes("\\") ? "\\" : "/";
   return convertFileSrc(`${dir}${sep}${file}`);

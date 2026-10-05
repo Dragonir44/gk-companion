@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 /// Bump when the model changes, so stale caches are re-extracted.
-pub const MODEL_VERSION: u32 = 12;
+pub const MODEL_VERSION: u32 = 13;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -54,6 +54,24 @@ pub struct GameData {
     /// valid combination, precomputed by the game).
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub alchemy_mixes: BTreeMap<String, Vec<Mix>>,
+    /// The in-game world map (gk2).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub map: Option<WorldMap>,
+}
+
+/// The world map: an image and where the world falls on it.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct WorldMap {
+    /// Sprite of the image in the icon sheets.
+    pub sprite: String,
+    /// Ground rectangle (`[x, z]`) the image covers, left to right and
+    /// bottom to top: the game maps positions linearly between them.
+    pub world_min: [f32; 2],
+    pub world_max: [f32; 2],
+    /// Interiors are drawn at a fixed point: zone id -> position on the
+    /// image, as fractions from its top-left corner.
+    pub zones: BTreeMap<String, [f32; 2]>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -264,6 +282,12 @@ mod tests {
             locales: BTreeMap::new(),
             icons: IconIndex::default(),
             alchemy_mixes: BTreeMap::new(),
+            map: Some(WorldMap {
+                sprite: "ui:world_map".into(),
+                world_min: [-70.0, -160.0],
+                world_max: [193.0, 156.0],
+                zones: BTreeMap::from([("home".into(), [0.25, 0.4])]),
+            }),
         };
         let json = serde_json::to_string(&data).unwrap();
         assert!(!json.contains("\"points\""), "empty fields are omitted");
