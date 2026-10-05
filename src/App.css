@@ -1103,3 +1103,80 @@ li.craft-row.leaf {
   margin: 0 0 6px;
   font-size: 13px;
 }
+
+/* --- Construction sites ----------------------------------------------- */
+
+.sites-view {
+  flex: 1;
+}
+.sites-body {
+  flex: 1;
+  overflow-y: auto;
+}
+.sites-group h3 {
+  font-size: 13px;
+  margin: 12px 0 6px;
+}
+.sites-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 10px;
+}
+.site {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.site-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.site-job {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  text-align: left;
+  background: transparent;
+  border-color: transparent;
+}
+.site-job:hover {
+  border-color: var(--line);
+}
+.site-job.on {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.site-job-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.site-job .check {
+  color: var(--accent);
+}
+.site-inputs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding-left: 20px;
+}
+.sites-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+}
+/* Four views + save + report + language: the app name (already in the
+   window title) makes room on narrower windows. */
+@media (max-width: 1500px) {
+  .topbar h1 {
+    display: none;
+  }
+}

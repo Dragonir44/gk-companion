@@ -83,6 +83,7 @@ pub fn normalize(b: &Value, names: &mut Names) -> Normalized {
             hidden: flag(c, "hidden"),
             needs_unlock: flag(c, "needs_unlock"),
             runes: None,
+            site: false,
         });
     }
 
@@ -105,6 +106,7 @@ pub fn normalize(b: &Value, names: &mut Names) -> Normalized {
             hidden: flag(c, "hidden"),
             needs_unlock: flag(c, "needs_unlock"),
             runes: None,
+            site: false,
         });
     }
 

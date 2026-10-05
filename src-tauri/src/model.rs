@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 /// Bump when the model changes, so stale caches are re-extracted.
-pub const MODEL_VERSION: u32 = 11;
+pub const MODEL_VERSION: u32 = 12;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -137,6 +137,10 @@ pub struct Recipe {
     /// ingredients are one of `GameData::alchemy_mixes`, not `inputs`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub runes: Option<[u32; 3]>,
+    /// A one-off job on a world object (repair, clear a blockage, build on
+    /// a town plot): listed as a construction site (gk2).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub site: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -228,6 +232,7 @@ mod tests {
             hidden: false,
             needs_unlock: false,
             runes: None,
+            site: false,
         };
         let tech = Tech {
             id: "t".into(),

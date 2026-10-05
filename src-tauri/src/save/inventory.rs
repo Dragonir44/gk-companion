@@ -1,4 +1,5 @@
-//! Items stored in a gk2 save: chests, sheds, containers, and the player.
+//! World objects of a gk2 save: where they are, and the items stored in
+//! chests, sheds, containers and the player's inventory.
 //!
 //! World objects live in `worldData/gameSceneDataList/*/wgoDataList/*`;
 //! each has an `inventory` whose items (`inventory/*` nodes with `id` and
@@ -36,6 +37,20 @@ pub fn is_storage(object: &str) -> bool {
     STORAGE_HINTS.iter().any(|h| object.contains(h))
 }
 
+/// A world object instance: construction sites, chests, buildings...
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct WorldObject {
+    pub id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub zone: Option<String>,
+    /// Ground position `[x, z]` (y is height).
+    pub pos: [f32; 2],
+}
+
+/// Objects parked far off the map (pooled, hidden).
+const PARKED: f32 = -500.0;
+
 #[derive(Default)]
 struct Frame {
     name: Option<String>,
@@ -45,11 +60,24 @@ struct Frame {
     item_count: i64,
 }
 
+/// World objects and stored items.
+pub struct World {
+    pub containers: Vec<Container>,
+    pub objects: Vec<WorldObject>,
+}
+
 pub fn containers(bytes: &[u8]) -> Result<Vec<Container>, SaveError> {
+    Ok(world(bytes)?.containers)
+}
+
+pub fn world(bytes: &[u8]) -> Result<World, SaveError> {
     let mut r = Reader::new(bytes);
     let mut stack: Vec<Frame> = Vec::new();
     // World object being read: (stack depth of its node, object id, zone).
     let mut wgo: Option<(usize, String, Option<String>)> = None;
+    // Its `position` floats (first three: x, height, z).
+    let mut pos: Vec<f64> = Vec::new();
+    let mut objects = Vec::new();
     let mut current: BTreeMap<String, u32> = BTreeMap::new();
     let mut player: BTreeMap<String, u32> = BTreeMap::new();
     let mut out = Vec::new();
@@ -65,6 +93,7 @@ pub fn containers(bytes: &[u8]) -> Result<Vec<Container>, SaveError> {
                 if name.is_none() && parent_is("wgoDataList") {
                     wgo = Some((stack.len(), String::new(), None));
                     current.clear();
+                    pos.clear();
                 }
                 stack.push(Frame { name, ..Default::default() });
             }
@@ -83,6 +112,15 @@ pub fn containers(bytes: &[u8]) -> Result<Vec<Container>, SaveError> {
                 if field == "id" {
                     if let Some(top) = stack.last_mut() {
                         top.item_id = Some(value);
+                    }
+                }
+            }
+            Entry::Float(_, v) => {
+                // Direct children of the object's `position` node.
+                if let Some((d, ..)) = &wgo {
+                    let in_position = stack.len() == *d + 2 && stack.last().and_then(|f| f.name.as_deref()) == Some("position");
+                    if in_position && pos.len() < 3 {
+                        pos.push(v);
                     }
                 }
             }
@@ -118,6 +156,11 @@ pub fn containers(bytes: &[u8]) -> Result<Vec<Container>, SaveError> {
                         if is_storage(id) && !current.is_empty() {
                             out.push(Container { object: id.clone(), zone: zone.clone(), items: std::mem::take(&mut current) });
                         }
+                        if let [x, _, z] = pos[..] {
+                            if x as f32 > PARKED && !id.is_empty() {
+                                objects.push(WorldObject { id: id.clone(), zone: zone.clone(), pos: [x as f32, z as f32] });
+                            }
+                        }
                         wgo = None;
                     }
                 }
@@ -129,7 +172,7 @@ pub fn containers(bytes: &[u8]) -> Result<Vec<Container>, SaveError> {
     if !player.is_empty() {
         out.insert(0, Container { object: PLAYER.into(), zone: None, items: player });
     }
-    Ok(out)
+    Ok(World { containers: out, objects })
 }
 
 #[cfg(test)]

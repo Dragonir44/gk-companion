@@ -99,6 +99,7 @@ fn alchemy(b: &Value) -> (Vec<Recipe>, BTreeMap<String, Vec<Mix>>) {
                 // Formulas are unlocked by research (or revealed in game).
                 needs_unlock: true,
                 runes: Some(runes(f)),
+                site: false,
             }
         })
         .collect();
@@ -129,6 +130,8 @@ fn town_buildings(b: &Value, names: &mut Names) -> Vec<Recipe> {
         .map(|t| {
             let id = text(t, "id");
             let mut stations = super::strings(t, &["craftsIn"]);
+            // Level 1 is built on a town plot: a construction site.
+            let on_plot = !stations.is_empty();
             if let Some(prev) = previous.get(id) {
                 stations = vec![prev.to_string()];
             }
@@ -147,9 +150,17 @@ fn town_buildings(b: &Value, names: &mut Names) -> Vec<Recipe> {
                 hidden: false,
                 needs_unlock: flag(t, "isNeedsUnlock"),
                 runes: None,
+                site: on_plot && !previous.contains_key(id),
             }
         })
         .collect()
+}
+
+/// One-off world jobs: the craft replaces its object (repairs) or removes
+/// it (blockages). Plantings also replace their plot but are repeated.
+fn is_site(c: &Value) -> bool {
+    let changes_world = !text(c, "replaceWgoId").is_empty() || flag(c, "isObjDestroyCraft");
+    changes_world && !text(c, "id").contains("planting")
 }
 
 /// Characters are world objects with the same id; they carry a portrait.
@@ -201,6 +212,7 @@ pub fn normalize(b: &Value, names: &mut Names) -> Normalized {
             hidden: flag(c, "isHidden"),
             needs_unlock: flag(c, "isNeedsUnlock"),
             runes: None,
+            site: is_site(c),
         });
     }
 
@@ -224,6 +236,7 @@ pub fn normalize(b: &Value, names: &mut Names) -> Normalized {
             hidden: false,
             needs_unlock: flag(c, "isNeedsUnlock"),
             runes: None,
+            site: false,
         });
     }
 
@@ -303,7 +316,13 @@ pub fn normalize(b: &Value, names: &mut Names) -> Normalized {
         .iter()
         .map(|z| {
             let id = text(z, "id");
-            Entity { name: names.exact(&format!("wz_{id}")), ..entity(names, id) }
+            // Town districts have no zone name, only their battle's
+            // (`wz_fight_A3_1` -> `fight_A3_1`: "Clear the Market Square").
+            let key = match id.strip_prefix("wz_") {
+                Some(battle) => battle.to_string(),
+                None => format!("wz_{id}"),
+            };
+            Entity { name: names.exact(&key), ..entity(names, id) }
         })
         .collect();
     let storage: Vec<String> = list(b, "wgoDefs")

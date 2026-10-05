@@ -68,6 +68,8 @@ interface State {
   renameList(id: string, name: string): void;
   deleteList(id: string): void;
   addEntry(recipe: string): void;
+  /** Adds recipes to a list (one craft each), or to a new list when `listId` is null. */
+  addRecipes(listId: string | null, recipes: string[], newName: string): void;
   setCount(index: number, count: number): void;
   removeEntry(index: number): void;
   setChoice(item: string, choice: string | undefined): void;
@@ -311,6 +313,29 @@ export const useStore = create<State>((set, get) => {
         }
         return { ...l, entries: [...l.entries, { recipe, count: 1 }] };
       });
+    },
+
+    addRecipes(listId, recipes, newName) {
+      const s = get();
+      let lists = s.lists;
+      let target = listId;
+      if (!target || !lists.some((l) => l.id === target)) {
+        const created = blankList(s.game, newName);
+        lists = [...lists, created];
+        target = created.id;
+      }
+      lists = lists.map((l) => {
+        if (l.id !== target) return l;
+        const entries = [...l.entries];
+        for (const recipe of recipes) {
+          const i = entries.findIndex((e) => e.recipe === recipe);
+          if (i >= 0) entries[i] = { ...entries[i], count: entries[i].count + 1 };
+          else entries.push({ recipe, count: 1 });
+        }
+        return { ...l, entries, updatedAt: Date.now() };
+      });
+      set({ lists, active: { ...s.active, [s.game]: target } });
+      persist();
     },
 
     setCount(index, count) {

@@ -17,6 +17,8 @@ pub enum Entry {
     Str(Option<String>, String),
     /// Integer values (int, uint, long, ulong).
     Int(Option<String>, i64),
+    /// Floating-point values (float, double).
+    Float(Option<String>, f64),
     /// Any other value, skipped.
     Other(Option<String>),
     EndOfStream,
@@ -150,14 +152,8 @@ impl<'a> Reader<'a> {
             0x19 => Entry::Int(name, u32::from_le_bytes(self.take(4)?.try_into().unwrap()) as i64),
             0x1B => Entry::Int(name, i64::from_le_bytes(self.take(8)?.try_into().unwrap())),
             0x1D => Entry::Int(name, u64::from_le_bytes(self.take(8)?.try_into().unwrap()) as i64),
-            0x1F => {
-                self.take(4)?;
-                Entry::Other(name)
-            }
-            0x21 => {
-                self.take(8)?;
-                Entry::Other(name)
-            }
+            0x1F => Entry::Float(name, f32::from_le_bytes(self.take(4)?.try_into().unwrap()) as f64),
+            0x21 => Entry::Float(name, f64::from_le_bytes(self.take(8)?.try_into().unwrap())),
             0x27 => {
                 let s = self.string()?;
                 Entry::Str(name, s)

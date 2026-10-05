@@ -1,7 +1,7 @@
 // Mirrors src-tauri/src/model.rs.
 
 export type GameId = "gk1" | "gk2";
-export type View = "planner" | "research" | "stock";
+export type View = "planner" | "research" | "sites" | "stock";
 export const GAMES: GameId[] = ["gk1", "gk2"];
 
 export interface Entity {
@@ -38,6 +38,8 @@ export interface Recipe {
   needsUnlock: boolean;
   /** Alchemy formula: runes [red, green, blue] its mix must total. */
   runes?: [number, number, number];
+  /** One-off job on a world object: a construction site (gk2). */
+  site?: boolean;
 }
 
 /** One valid alchemy mix: one of each item. */
@@ -172,6 +174,15 @@ export interface Progress {
   lists: Record<string, string[]>;
   /** Stored items per container (gk2). */
   inventories?: Container[];
+  /** World object instances with their ground position (gk2). */
+  objects?: WorldObject[];
+}
+
+export interface WorldObject {
+  id: string;
+  zone?: string;
+  /** [x, z] */
+  pos: [number, number];
 }
 
 export interface Container {

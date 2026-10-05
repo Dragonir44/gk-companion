@@ -10,6 +10,7 @@ import { Resizer } from "./components/Resizer";
 import { Results } from "./components/Results";
 import { SaveSelector } from "./components/SaveSelector";
 import { Search } from "./components/Search";
+import { SitesView } from "./components/SitesView";
 import { StockView } from "./components/StockView";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { fmt, LANGUAGES, strings, type Strings } from "./i18n";
@@ -146,9 +147,9 @@ export default function App() {
           ))}
         </nav>
         <nav className="views">
-          {(["planner", "research", "stock"] as const).map((v) => (
+          {(["planner", "research", "sites", "stock"] as const).map((v) => (
             <button key={v} className={v === view ? "active" : ""} onClick={() => setView(v)}>
-              {v === "stock" ? t.stockView : t[v]}
+              {v === "stock" ? t.stockView : v === "sites" ? t.sitesView : t[v]}
             </button>
           ))}
         </nav>
@@ -195,6 +196,10 @@ export default function App() {
           {view === "research" ? (
             <main className="layout-research">
               <ResearchTree />
+            </main>
+          ) : view === "sites" ? (
+            <main className="layout-research">
+              <SitesView />
             </main>
           ) : view === "stock" ? (
             <main className="layout-research">

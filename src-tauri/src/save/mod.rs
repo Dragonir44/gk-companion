@@ -65,6 +65,8 @@ pub struct Progress {
     pub lists: BTreeMap<String, Vec<String>>,
     /// Stored items, per container (gk2; empty for gk1 for now).
     pub inventories: Vec<inventory::Container>,
+    /// World object instances with their position (gk2).
+    pub objects: Vec<inventory::WorldObject>,
 }
 
 pub fn supported(game: GameId) -> bool {
@@ -136,11 +138,12 @@ pub fn read_progress(game: GameId, slot: &SaveSlot) -> Result<Progress, SaveErro
         return Err(SaveError::Unsupported);
     }
     let bytes = std::fs::read(&slot.path)?;
-    let (lists, inventories) = match game {
-        GameId::Gk1 => (gk1::progress_lists(&bytes)?, vec![]),
-        GameId::Gk2 => (knowledge_lists(&bytes)?, inventory::containers(&bytes)?),
+    let (lists, world) = match game {
+        GameId::Gk1 => (gk1::progress_lists(&bytes)?, None),
+        GameId::Gk2 => (knowledge_lists(&bytes)?, Some(inventory::world(&bytes)?)),
     };
-    Ok(Progress { slot: slot.id.clone(), modified: slot.modified, lists, inventories })
+    let (inventories, objects) = world.map(|w| (w.containers, w.objects)).unwrap_or_default();
+    Ok(Progress { slot: slot.id.clone(), modified: slot.modified, lists, inventories, objects })
 }
 
 /// String lists directly under `knowledgeSystem/<field>`.
@@ -168,7 +171,7 @@ fn knowledge_lists(bytes: &[u8]) -> Result<BTreeMap<String, Vec<String>>, SaveEr
                     }
                 }
             }
-            Entry::Str(Some(_), _) | Entry::Int(..) | Entry::Other(_) => {}
+            Entry::Str(Some(_), _) | Entry::Int(..) | Entry::Float(..) | Entry::Other(_) => {}
             Entry::EndOfStream => break,
         }
     }
