@@ -5,6 +5,11 @@ you want to make, get the raw materials to gather, the crafts to run in order,
 and the full crafting tree. Lists are saved locally. A research tree view shows
 what each tech costs, needs and unlocks, with hidden techs kept spoiler-free.
 
+It follows your latest save: what you have researched, what your chests hold
+(counted against your lists, and in a Stocks view), and in Graveyard Keeper 2
+the construction sites left (repairs, blockages, town plots), numbered on the
+game's own world map, ready to add to a list.
+
 The app ships **no game content**. On launch it reads recipes, techs and texts
 (11 languages) straight from your own install, so it stays in sync with game
 updates and nothing belonging to the publisher is redistributed.
