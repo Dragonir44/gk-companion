@@ -13,7 +13,7 @@ use std::time::UNIX_EPOCH;
 use serde_json::Value;
 
 use crate::model::{Entity, GameData, GameId, Recipe, Tech, MODEL_VERSION};
-use crate::unity::serialized::SerializedFile;
+use crate::unity::serialized::{ObjectInfo, SerializedFile};
 use crate::unity::typetree::Schema;
 use crate::unity::UnityError;
 use names::Names;
@@ -115,7 +115,15 @@ pub fn fingerprint(root: &Path, build_id: Option<&str>) -> Result<String, Extrac
     Ok(parts.join("-"))
 }
 
-pub fn extract(game: GameId, root: &Path, build_id: Option<&str>) -> Result<Extracted, ExtractError> {
+/// The game's data objects: `GameBalance` and the `lng_*` texts.
+struct GameObjects {
+    schema: Schema,
+    data: PathBuf,
+    file: SerializedFile,
+    found: Vec<(String, ObjectInfo)>,
+}
+
+fn open_game(game: GameId, root: &Path) -> Result<GameObjects, ExtractError> {
     let schema = Schema::parse(match game {
         GameId::Gk1 => GK1_SCHEMA,
         GameId::Gk2 => GK2_SCHEMA,
@@ -123,27 +131,51 @@ pub fn extract(game: GameId, root: &Path, build_id: Option<&str>) -> Result<Extr
     let data = data_dir(root)?;
     let file = SerializedFile::open(&data.join("resources.assets"))?;
     let balance_name = balance_object(game);
-
     let found = file.find_monobehaviours(|n| n == balance_name || n.starts_with("lng_"), MIN_DATA_OBJECT_SIZE)?;
+    Ok(GameObjects { schema, data, file, found })
+}
 
-    let decode = |class: &str, name: &str, obj| -> Result<Value, ExtractError> {
-        let expected = &schema.classes.get(class).ok_or_else(|| ExtractError::Missing(class.into()))?.type_hash;
-        let actual = file.type_hash_hex(obj);
+impl GameObjects {
+    /// Decodes an object, checking first that its layout is the schema's.
+    fn decode(&self, class: &str, name: &str, obj: &ObjectInfo) -> Result<Value, ExtractError> {
+        let expected = &self.schema.classes.get(class).ok_or_else(|| ExtractError::Missing(class.into()))?.type_hash;
+        let actual = self.file.type_hash_hex(obj);
         if *expected != actual {
             return Err(ExtractError::Outdated(format!("{name}: type hash {actual}, expected {expected}")));
         }
-        let raw = file.read_object(obj)?;
-        schema.decode(class, &raw).map_err(|e| match e {
+        let raw = self.file.read_object(obj)?;
+        self.schema.decode(class, &raw).map_err(|e| match e {
             UnityError::LayoutMismatch(m) => ExtractError::Outdated(m),
             e => e.into(),
         })
-    };
+    }
 
-    let (_, balance_obj) = found
-        .iter()
-        .find(|(n, _)| n == balance_name)
-        .ok_or_else(|| ExtractError::Missing(balance_name.into()))?;
-    let balance = decode(balance_name, balance_name, balance_obj)?;
+    fn balance(&self, game: GameId) -> Result<Value, ExtractError> {
+        let name = balance_object(game);
+        let (_, obj) = self.found.iter().find(|(n, _)| n == name).ok_or_else(|| ExtractError::Missing(name.into()))?;
+        self.decode(name, name, obj)
+    }
+}
+
+/// The game's `GameBalance`, decoded but not normalized: for investigating
+/// game data (`cargo run --example dump`).
+pub fn raw_balance(game: GameId, root: &Path) -> Result<Value, ExtractError> {
+    open_game(game, root)?.balance(game)
+}
+
+/// A language's raw text table (`lng_<lang>`), for investigating names.
+pub fn raw_locale(game: GameId, root: &Path, lang: &str) -> Result<Value, ExtractError> {
+    let objects = open_game(game, root)?;
+    let name = format!("lng_{lang}");
+    let (_, obj) = objects.found.iter().find(|(n, _)| *n == name).ok_or_else(|| ExtractError::Missing(name.clone()))?;
+    objects.decode(LNG_CLASS, &name, obj)
+}
+
+pub fn extract(game: GameId, root: &Path, build_id: Option<&str>) -> Result<Extracted, ExtractError> {
+    let objects = open_game(game, root)?;
+    let GameObjects { schema, data, file, found } = &objects;
+    let decode = |class: &str, name: &str, obj: &ObjectInfo| objects.decode(class, name, obj);
+    let balance = objects.balance(game)?;
 
     let mut locales: BTreeMap<String, HashMap<String, String>> = BTreeMap::new();
     let mut aliases = HashMap::new();
@@ -175,7 +207,7 @@ pub fn extract(game: GameId, root: &Path, build_id: Option<&str>) -> Result<Extr
         .map(|(id, key)| crate::model::Branch { id: *id, name: names.exact(key) })
         .collect();
 
-    let (icon_set, icons_error) = match icons::load(game, &data, &schema) {
+    let (icon_set, icons_error) = match icons::load(game, data, schema) {
         Ok(set) => (Some(set), None),
         Err(e) => (None, Some(e.to_string())),
     };

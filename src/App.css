@@ -856,3 +856,127 @@ button.link {
   white-space: nowrap;
   vertical-align: bottom;
 }
+
+/* --- Crafting tree (materials + steps merged) ---------------------- */
+
+.crafting ul {
+  list-style: none;
+  margin: 0;
+  padding-left: 16px;
+  border-left: 1px dashed var(--line);
+}
+.crafting-tools {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 6px;
+}
+.craft-entry {
+  margin-bottom: 10px;
+}
+.craft-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+  min-width: 0;
+}
+summary.craft-row {
+  cursor: pointer;
+}
+li.craft-row.leaf {
+  padding-left: 14px;
+}
+.craft-row .qty {
+  min-width: 34px;
+}
+.craft-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.craft-where {
+  font-size: 12px;
+  white-space: nowrap;
+}
+.craft-controls {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+.craft-controls .choice.compact {
+  margin: 0;
+  max-width: 150px;
+}
+.craft-controls input[type="number"] {
+  width: 56px;
+}
+.in-stock {
+  color: var(--pt-g);
+  font-weight: 700;
+}
+/* Narrower dropdowns everywhere: the full recipe is in the tooltip. */
+.choice,
+.choice.compact {
+  max-width: 220px;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* --- Resizable planner columns --------------------------------------- */
+
+.layout {
+  column-gap: 0;
+}
+.resizer {
+  cursor: col-resize;
+  position: relative;
+  touch-action: none;
+}
+.resizer::after {
+  content: "";
+  position: absolute;
+  inset: 25% 3px;
+  border-radius: 2px;
+  background: var(--line);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.resizer:hover::after,
+.resizer:active::after {
+  opacity: 1;
+  background: var(--accent);
+}
+@media (max-width: 900px) {
+  .layout {
+    grid-template-columns: 1fr !important;
+    row-gap: 12px;
+  }
+  .resizer {
+    display: none;
+  }
+}
+/* The list picker truncates long list names. */
+.list-header select {
+  min-width: 0;
+  text-overflow: ellipsis;
+}
+/* The item name wins the space; the workshop shrinks first. */
+.craft-name {
+  flex: 0 1 auto;
+}
+.craft-where {
+  flex: 0 3 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.craft-controls .have-input {
+  width: 60px;
+}

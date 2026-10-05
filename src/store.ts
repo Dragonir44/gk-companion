@@ -21,6 +21,8 @@ export interface SaveState {
   error?: string;
 }
 
+export const DEFAULT_COLUMNS: [number, number] = [340, 380];
+
 /** Follow no save. */
 export const NO_SAVE = "none";
 
@@ -32,6 +34,8 @@ interface State {
   view: View;
   /** Show techs the game keeps hidden until revealed. */
   showSpoilers: boolean;
+  /** Planner column widths in px (search, list); results take the rest. */
+  columns: [number, number];
   statuses: GameStatus[];
   games: Partial<Record<GameId, GameState>>;
   lists: CraftList[];
@@ -49,6 +53,7 @@ interface State {
   setShowHidden(v: boolean): void;
   setView(v: View): void;
   setShowSpoilers(v: boolean): void;
+  setColumns(c: [number, number]): void;
   refreshSaves(game: GameId): Promise<void>;
   setSaveChoice(game: GameId, choice: string | undefined): void;
 
@@ -86,6 +91,7 @@ export const useStore = create<State>((set, get) => {
           view: s.view,
           showSpoilers: s.showSpoilers,
           saveChoice: s.saveChoice,
+          columns: s.columns,
         },
       };
       invoke("save_lists", { lists: file }).catch((e) => console.error("save_lists", e));
@@ -120,6 +126,7 @@ export const useStore = create<State>((set, get) => {
     showHidden: false,
     view: "planner",
     showSpoilers: false,
+    columns: DEFAULT_COLUMNS,
     statuses: [],
     games: {},
     lists: [],
@@ -148,6 +155,7 @@ export const useStore = create<State>((set, get) => {
         view: prefs.view ?? "planner",
         showSpoilers: prefs.showSpoilers ?? false,
         saveChoice: prefs.saveChoice ?? {},
+        columns: prefs.columns ?? DEFAULT_COLUMNS,
         lists: file?.lists ?? [],
         active: file?.active ?? {},
       });
@@ -205,6 +213,11 @@ export const useStore = create<State>((set, get) => {
 
     setShowSpoilers(showSpoilers) {
       set({ showSpoilers });
+      persist();
+    },
+
+    setColumns(columns) {
+      set({ columns });
       persist();
     },
 

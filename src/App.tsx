@@ -6,6 +6,7 @@ import { GameCtx } from "./components/ctx";
 import { ListPanel } from "./components/ListPanel";
 import { ReportMenu } from "./components/ReportMenu";
 import { ResearchTree } from "./components/ResearchTree";
+import { Resizer } from "./components/Resizer";
 import { Results } from "./components/Results";
 import { SaveSelector } from "./components/SaveSelector";
 import { Search } from "./components/Search";
@@ -13,7 +14,7 @@ import { UpdateBanner } from "./components/UpdateBanner";
 import { fmt, LANGUAGES, strings, type Strings } from "./i18n";
 import { namer } from "./names";
 import { unlockedBy, unlocks } from "./progress";
-import { useStore } from "./store";
+import { DEFAULT_COLUMNS, useStore } from "./store";
 import { GAMES } from "./types";
 import "./App.css";
 
@@ -66,8 +67,8 @@ function useAppVersion(): string | undefined {
 }
 
 export default function App() {
-  const { ready, game, lang, games, statuses, view, saves } = useStore();
-  const { init, selectGame, setLang, loadGame, setGamePath, setView, refreshSaves } = useStore.getState();
+  const { ready, game, lang, games, statuses, view, saves, columns } = useStore();
+  const { init, selectGame, setLang, loadGame, setGamePath, setView, refreshSaves, setColumns } = useStore.getState();
   const progress = saves[game]?.progress;
   const appVersion = useAppVersion();
   const t = strings(lang);
@@ -185,9 +186,19 @@ export default function App() {
               <ResearchTree />
             </main>
           ) : (
-            <main className="layout">
+            <main className="layout" style={{ gridTemplateColumns: `${columns[0]}px 8px ${columns[1]}px 8px minmax(320px, 1fr)` }}>
               <Search />
+              <Resizer
+                width={columns[0]}
+                onChange={(w) => setColumns([w, columns[1]])}
+                onReset={() => setColumns([DEFAULT_COLUMNS[0], columns[1]])}
+              />
               <ListPanel />
+              <Resizer
+                width={columns[1]}
+                onChange={(w) => setColumns([columns[0], w])}
+                onReset={() => setColumns([columns[0], DEFAULT_COLUMNS[1]])}
+              />
               <Results />
             </main>
           )}

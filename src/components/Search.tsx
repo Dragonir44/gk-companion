@@ -26,7 +26,8 @@ export function Search() {
       (r) =>
         (showHidden || !r.hidden) &&
         (!hasSave || !onlyUnlocked || u.recipeUnlocked(r)) &&
-        (r.kind === "building" ? r.builds : r.outputs.length > 0 || (r.inputs.length > 0 && r.stations.length > 0)),
+        // Buildings: placed objects, or named ones like town shops.
+        (r.kind === "building" ? r.builds || r.name : r.outputs.length > 0 || (r.inputs.length > 0 && r.stations.length > 0)),
     );
     return visible.map((r) => ({
       r,

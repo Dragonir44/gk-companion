@@ -7,7 +7,7 @@ import { fmtNum, Points, useGame } from "./ctx";
 import { Icon } from "./Icon";
 import { LockBadge } from "./Search";
 
-type Tab = "materials" | "steps" | "tree";
+type Tab = "materials" | "crafting";
 
 export function Results() {
   const { t, idx, available } = useGame();
@@ -23,15 +23,14 @@ export function Results() {
   return (
     <section className="panel results-panel">
       <nav className="tabs" role="tablist">
-        {(["materials", "steps", "tree"] as Tab[]).map((k) => (
+        {(["materials", "crafting"] as Tab[]).map((k) => (
           <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? "active" : ""} onClick={() => setTab(k)}>
             {t[k]}
           </button>
         ))}
       </nav>
       {tab === "materials" && <Materials p={p} list={list} />}
-      {tab === "steps" && <Steps p={p} list={list} />}
-      {tab === "tree" && <Tree list={list} />}
+      {tab === "crafting" && <Crafting list={list} />}
     </section>
   );
 }
@@ -134,52 +133,35 @@ function Materials({ p, list }: { p: Plan; list: CraftList }) {
   );
 }
 
-function Steps({ p, list }: { p: Plan; list: CraftList }) {
-  const { t, n } = useGame();
-  const setHave = useStore((s) => s.setHave);
-  const steps = p.steps.filter((s) => s.item !== undefined);
-  if (!steps.length) return <p className="muted tab-body">{t.stepsEmpty}</p>;
+/** The crafting tree of each list entry, with choices inline. */
+function Crafting({ list }: { list: CraftList }) {
+  const { t, n, idx, available } = useGame();
+  // Bumping the key remounts the tree with every node open or closed.
+  const [expand, setExpand] = useState<{ open: boolean; key: number }>({ open: true, key: 0 });
   return (
-    <ol className="tab-body steps">
-      {steps.map((s, i) => (
-        <li key={`${s.recipe.id}-${s.item}-${i}`}>
-          <span className="qty">{s.crafts}×</span>
-          <span className="item">
-            <Icon sprite={n.icon(s.item!)} size={24} />
-            <LockBadge r={s.recipe} />
-            <strong>{n.name(s.item!)}</strong>
-            {s.recipe.outputs.find((o) => o.item === s.item)!.count > 1 && (
-              <span className="muted"> (×{s.recipe.outputs.find((o) => o.item === s.item)!.count})</span>
-            )}
-            <span className="muted"> — {n.station(s.recipe) ?? t.anywhere}</span>
-            <Points points={s.recipe.points} />
-          </span>
-          <ItemChoice item={s.item!} />
-          <label className="have">
-            {t.owned}
-            <input type="number" min={0} value={list.have[s.item!] ?? ""} onChange={(e) => setHave(s.item!, Number(e.target.value))} />
-          </label>
-        </li>
-      ))}
-    </ol>
-  );
-}
-
-function Tree({ list }: { list: CraftList }) {
-  const { n, idx, available } = useGame();
-  return (
-    <div className="tab-body tree">
+    <div className="tab-body crafting">
+      <div className="crafting-tools">
+        <button className="small-btn" onClick={() => setExpand((e) => ({ open: !e.open, key: e.key + 1 }))}>
+          {expand.open ? t.collapseAll : t.expandAll}
+        </button>
+      </div>
       {list.entries.map((e) => {
         const r = idx.recipes.get(e.recipe);
         if (!r) return null;
         return (
-          <details key={e.recipe} open>
-            <summary>
-              <span className="qty">{e.count}×</span> <Icon sprite={n.recipeIcon(r)} size={24} /> <strong>{n.recipe(r)}</strong>
+          <details key={`${e.recipe}-${expand.key}`} open={expand.open} className="craft-entry">
+            <summary className="craft-row root">
+              <span className="qty">{e.count}×</span>
+              <Icon sprite={n.recipeIcon(r)} size={24} />
+              <span className="craft-name">
+                <LockBadge r={r} />
+                <strong>{n.recipe(r)}</strong>
+              </span>
+              <span className="craft-where muted">{n.station(r) ?? (r.kind === "craft" ? t.anywhere : "")}</span>
             </summary>
             <ul>
               {tree(idx, r, e.count, list.choices, available).map((node, i) => (
-                <TreeItem key={i} node={node} />
+                <CraftNode key={i} node={node} list={list} open={expand.open} />
               ))}
             </ul>
           </details>
@@ -189,29 +171,48 @@ function Tree({ list }: { list: CraftList }) {
   );
 }
 
-function TreeItem({ node }: { node: TreeNode }) {
-  const { t, n } = useGame();
-  const label = (
+function CraftNode({ node, list, open }: { node: TreeNode; list: CraftList; open: boolean }) {
+  const { t, n, idx } = useGame();
+  const setHave = useStore((s) => s.setHave);
+  const owned = list.have[node.item] ?? 0;
+  const row = (
     <>
-      <span className="qty">{fmtNum(node.qty)}</span> <Icon sprite={n.icon(node.item)} size={20} /> {n.name(node.item)}
-      {node.group && <span className="badge">{t.anyOf}</span>}
-      {node.recipe && (
-        <span className="muted">
-          {" "}
-          — {node.crafts}× {n.station(node.recipe) ?? t.anywhere}
-        </span>
-      )}
-      {node.cycle && <span className="badge dim">↻</span>}
+      <span className="qty">{fmtNum(node.qty)}</span>
+      <Icon sprite={n.icon(node.item)} size={20} />
+      <span className="craft-name" title={n.name(node.item)}>
+        {node.recipe && <LockBadge r={node.recipe} />}
+        {n.name(node.item)}
+        {node.group && <span className="badge">{t.anyOf}</span>}
+        {node.cycle && <span className="badge dim">↻</span>}
+        {owned >= node.qty && <span className="in-stock" title={t.inStock}>✓</span>}
+      </span>
+      <span className="craft-where muted">
+        {node.recipe ? `${node.crafts}× ${n.station(node.recipe) ?? t.anywhere}` : node.group ? "" : t.gathered}
+      </span>
+      <span className="craft-controls" onClick={(e) => e.preventDefault()}>
+        {!node.group && idx.producers.has(node.item) && <ItemChoice item={node.item} compact />}
+        {!node.group && (
+          <input
+            className="have-input"
+            type="number"
+            min={0}
+            placeholder={t.owned}
+            title={t.owned}
+            value={list.have[node.item] ?? ""}
+            onChange={(e) => setHave(node.item, Number(e.target.value))}
+          />
+        )}
+      </span>
     </>
   );
-  if (!node.children.length) return <li className="leaf">{label}</li>;
+  if (!node.children.length) return <li className="craft-row leaf">{row}</li>;
   return (
     <li>
-      <details open>
-        <summary>{label}</summary>
+      <details open={open}>
+        <summary className="craft-row">{row}</summary>
         <ul>
           {node.children.map((c, i) => (
-            <TreeItem key={i} node={c} />
+            <CraftNode key={i} node={c} list={list} open={open} />
           ))}
         </ul>
       </details>
@@ -234,9 +235,11 @@ function ItemChoice({ item, compact }: { item: string; compact?: boolean }) {
 
   // The default needs no stored choice; storing it would pin it forever.
   const fallback = chosenRecipe(idx, item, {}, available)?.id ?? RAW;
+  const currentRecipe = producers.find((r) => r.id === current);
   return (
     <select
       className={compact ? "choice compact" : "choice"}
+      title={currentRecipe ? label(currentRecipe) : t.gatherIt}
       value={current}
       onChange={(e) => setChoice(item, e.target.value === fallback ? undefined : e.target.value)}
     >

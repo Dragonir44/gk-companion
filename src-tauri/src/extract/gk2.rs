@@ -53,8 +53,46 @@ fn outputs(v: Option<&Value>) -> Vec<Stack> {
             item: text(i, "id").to_string(),
             count: value(i.get("count")).unwrap_or(1.0),
             group: false,
-            chance: value(i.get("chance")).filter(|&c| c > 0.0 && c < 1.0),
+            chance: chance(i.get("chance")),
             expr: formula(i.get("count")),
+        })
+        .collect()
+}
+
+const TOWN_CRAFT_PREFIX: &str = "town_building_craft:";
+
+/// Town shops and houses, one recipe per level (`Pharmacy_t1`..`_t3`,
+/// named "Apothicaire", "Apothicaire II"...). Level 1 is built at a
+/// signboard; higher levels upgrade the previous level's building.
+fn town_buildings(b: &Value, names: &mut Names) -> Vec<Recipe> {
+    let defs = list(b, "townBuildingDefs");
+    let previous: HashMap<&str, &str> = defs
+        .iter()
+        .filter(|t| !text(t, "lvlUpId").is_empty())
+        .map(|t| (text(t, "lvlUpId"), text(t, "id")))
+        .collect();
+    defs.iter()
+        .map(|t| {
+            let id = text(t, "id");
+            let mut stations = super::strings(t, &["craftsIn"]);
+            if let Some(prev) = previous.get(id) {
+                stations = vec![prev.to_string()];
+            }
+            Recipe {
+                id: id.to_string(),
+                name: names.exact(id),
+                icon: super::opt_text(t, "iconId"),
+                kind: RecipeKind::Building,
+                stations,
+                inputs: needs(list(t, "needItems")),
+                outputs: vec![],
+                points: BTreeMap::new(),
+                time: None,
+                energy: None,
+                builds: None,
+                hidden: false,
+                needs_unlock: flag(t, "isNeedsUnlock"),
+            }
         })
         .collect()
 }
@@ -65,6 +103,20 @@ fn reputation_lock(t: &Value, names: &mut Names, portraits: &HashMap<&str, &str>
     let npc = text(rv, "type").to_string();
     let portrait = portraits.get(npc.as_str()).map(|p| p.to_string());
     Some(ReputationLock { name: names.exact(&npc), value: num(rv, "value"), portrait, npc })
+}
+
+/// None for a guaranteed output. A chance formula that depends on game
+/// state (`0.5*WorkerPar("perk_alchemist")`) evaluates to 0 without perks:
+/// still a chance (0 = "random"), never a guaranteed output.
+fn chance(v: Option<&Value>) -> Option<f64> {
+    let v = v?;
+    let set = v.get("pureValueType").and_then(Value::as_i64) == Some(PURE_VALUE_FLOAT)
+        || !text(v, "expressionString").trim().is_empty();
+    if !set {
+        return None;
+    }
+    let c = value(Some(v)).unwrap_or(0.0);
+    (c < 1.0).then_some(c.max(0.0))
 }
 
 fn points(c: &Value) -> BTreeMap<String, f64> {
@@ -116,6 +168,29 @@ pub fn normalize(b: &Value, names: &mut Names) -> Normalized {
             hidden: false,
             needs_unlock: flag(c, "isNeedsUnlock"),
         });
+    }
+
+    // Crafts named after an alchemy formula carry no station: the game
+    // makes them where the formula is mixed (the alchemy lab).
+    let formula_stations: HashMap<&str, Vec<String>> = list(b, "alchemyFormulaDefs")
+        .iter()
+        .map(|f| (text(f, "id"), super::strings(f, &["craftsIn"])))
+        .collect();
+    for r in recipes.iter_mut().filter(|r| r.stations.is_empty()) {
+        if let Some(st) = formula_stations.get(r.id.as_str()) {
+            r.stations = st.clone();
+        }
+    }
+
+    // Town signboards (`t_b_signboard_house`) share the texts of the plots
+    // they stand on (`repair_sign_house`: "Logement").
+    for plot in ["house", "shop", "yard"] {
+        names.add_alias(&format!("t_b_signboard_{plot}"), &format!("repair_sign_{plot}"));
+    }
+    recipes.extend(town_buildings(b, names));
+    // Each town building also exists as a nameless `town_building_craft:<id>` craft.
+    for r in recipes.iter_mut().filter(|r| r.id.starts_with(TOWN_CRAFT_PREFIX)) {
+        r.hidden = true;
     }
 
     let portraits: HashMap<&str, &str> = list(b, "wgoDefs")

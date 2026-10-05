@@ -131,6 +131,7 @@ export interface ListsFile {
     view?: View;
     showSpoilers?: boolean;
     saveChoice?: Partial<Record<GameId, string>>;
+    columns?: [number, number];
   };
 }
 

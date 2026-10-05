@@ -93,6 +93,11 @@ const fr = {
   reportFeature: "Proposer une idée",
   reportHint: "Ouvre un formulaire GitHub pré-rempli (compte GitHub requis).",
   changeFolder: "Changer le dossier du jeu…",
+  crafting: "Fabrication",
+  gathered: "récolte",
+  inStock: "En stock",
+  expandAll: "Tout déplier",
+  collapseAll: "Tout replier",
   manualFolder: "dossier choisi",
 } as const;
 
@@ -190,6 +195,11 @@ const en: Strings = {
   reportFeature: "Suggest a feature",
   reportHint: "Opens a prefilled GitHub form (GitHub account needed).",
   changeFolder: "Change the game folder…",
+  crafting: "Crafting",
+  gathered: "gather",
+  inStock: "In stock",
+  expandAll: "Expand all",
+  collapseAll: "Collapse all",
   manualFolder: "chosen folder",
 };
 

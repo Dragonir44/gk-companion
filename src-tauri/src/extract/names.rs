@@ -31,6 +31,11 @@ impl Names {
         None
     }
 
+    /// Names `id` like the existing key `to` (game-specific conventions).
+    pub fn add_alias(&mut self, id: &str, to: &str) {
+        self.aliases.insert(id.to_string(), to.to_string());
+    }
+
     /// Name key only if the id (or its alias) is itself a key: no guessing.
     /// For ids whose fallbacks would name the wrong thing (crafts).
     pub fn exact(&mut self, id: &str) -> Option<String> {
