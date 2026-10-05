@@ -103,6 +103,7 @@ export default function App() {
       hasSave: !!progress,
       available: u.recipeUnlocked,
       unlockers,
+      knownMixes: new Set(progress?.lists.knownMixCrafts ?? []),
     };
   }, [g?.index, lang, t, progress, unlockers]);
 

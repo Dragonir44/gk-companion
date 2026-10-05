@@ -82,6 +82,7 @@ pub fn normalize(b: &Value, names: &mut Names) -> Normalized {
             builds: None,
             hidden: flag(c, "hidden"),
             needs_unlock: flag(c, "needs_unlock"),
+            runes: None,
         });
     }
 
@@ -103,6 +104,7 @@ pub fn normalize(b: &Value, names: &mut Names) -> Normalized {
             builds: (!out.is_empty()).then(|| out.to_string()),
             hidden: flag(c, "hidden"),
             needs_unlock: flag(c, "needs_unlock"),
+            runes: None,
         });
     }
 
@@ -145,5 +147,5 @@ pub fn normalize(b: &Value, names: &mut Names) -> Normalized {
         .map(|id| (id, format!("tbranch_{id}")))
         .collect();
 
-    Normalized { items, objects, groups: BTreeMap::new(), recipes, techs, branches, object_icons: Default::default() }
+    Normalized { items, objects, groups: BTreeMap::new(), recipes, techs, branches, object_icons: Default::default(), alchemy_mixes: Default::default() }
 }

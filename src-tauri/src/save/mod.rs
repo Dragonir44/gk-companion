@@ -30,7 +30,7 @@ pub enum SaveError {
 }
 
 /// `knowledgeSystem` lists sent to the frontend.
-const KEPT_LISTS: [&str; 7] = [
+const KEPT_LISTS: &[&str] = &[
     "unlockedTechs",
     "revealedTechs",
     "hiddenTechs",
@@ -38,6 +38,9 @@ const KEPT_LISTS: [&str; 7] = [
     "unlockedBuildings",
     "lockedBuildings",
     "blackListCrafts",
+    // Alchemy: formulas researched, and mixes already made in game.
+    "unlockedAlchemyFormulas",
+    "knownMixCrafts",
 ];
 const KNOWLEDGE: &str = "knowledgeSystem";
 

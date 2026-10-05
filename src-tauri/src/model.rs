@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 /// Bump when the model changes, so stale caches are re-extracted.
-pub const MODEL_VERSION: u32 = 9;
+pub const MODEL_VERSION: u32 = 10;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -47,6 +47,19 @@ pub struct GameData {
     pub locales: BTreeMap<String, BTreeMap<String, String>>,
     #[serde(default)]
     pub icons: IconIndex,
+    /// Alchemy recipe id -> the ingredient mixes that make it (gk2: every
+    /// valid combination, precomputed by the game).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub alchemy_mixes: BTreeMap<String, Vec<Mix>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Mix {
+    /// The game's mix id (`mix:clay:flour:fragrance`), as listed in saves.
+    pub id: String,
+    /// One of each.
+    pub items: Vec<String>,
 }
 
 /// Icon sprites, cut from sheet images written next to the cache.
@@ -77,6 +90,9 @@ pub struct Entity {
     /// Icon sprite name (see `IconIndex`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub icon: Option<String>,
+    /// Alchemy runes `[red, green, blue]` the item brings to a mix (gk2).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runes: Option<[u32; 3]>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -114,6 +130,10 @@ pub struct Recipe {
     pub builds: Option<String>,
     pub hidden: bool,
     pub needs_unlock: bool,
+    /// Alchemy formula: runes `[red, green, blue]` the mix must total. Its
+    /// ingredients are one of `GameData::alchemy_mixes`, not `inputs`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runes: Option<[u32; 3]>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -204,6 +224,7 @@ mod tests {
             builds: None,
             hidden: false,
             needs_unlock: false,
+            runes: None,
         };
         let tech = Tech {
             id: "t".into(),
@@ -225,7 +246,7 @@ mod tests {
             fingerprint: "fp".into(),
             game_build: None,
             unity_version: "6000".into(),
-            items: vec![Entity { id: "nails".into(), name: None, desc: None, heavy: false, icon: None }],
+            items: vec![Entity { id: "nails".into(), name: None, desc: None, heavy: false, icon: None, runes: None }],
             objects: vec![],
             groups: BTreeMap::new(),
             recipes: vec![recipe],
@@ -233,6 +254,7 @@ mod tests {
             branches: vec![Branch { id: 0, name: None }],
             locales: BTreeMap::new(),
             icons: IconIndex::default(),
+            alchemy_mixes: BTreeMap::new(),
         };
         let json = serde_json::to_string(&data).unwrap();
         assert!(!json.contains("\"points\""), "empty fields are omitted");

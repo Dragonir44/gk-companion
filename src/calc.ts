@@ -1,7 +1,7 @@
 // Crafting planner: resolves a list of recipes down to raw materials.
 // Pure functions over GameData; no React, no Tauri.
 
-import type { GameData, ListEntry, Recipe, Stack } from "./types";
+import type { GameData, ListEntry, Mix, Recipe, Stack } from "./types";
 
 export const RAW = "raw";
 
@@ -10,7 +10,12 @@ export interface Index {
   recipes: Map<string, Recipe>;
   /** Item id -> recipes that make it, best default first. */
   producers: Map<string, Recipe[]>;
+  /** Alchemy recipe id -> its mixes. */
+  mixes: Map<string, Mix[]>;
 }
+
+/** Choice key of the mix used for an alchemy recipe. */
+export const mixKey = (recipeId: string) => `mix:${recipeId}`;
 
 /** Output count of `item` per craft of `r` (guaranteed outputs only). */
 export function yieldOf(r: Recipe, item: string): number {
@@ -31,8 +36,10 @@ export function buildIndex(data: GameData): Index {
     }
   }
   // Default: real crafts before zero-input productions (zombie mines...),
-  // then recipes whose main output is the item, then cheapest per unit.
-  const cost = (r: Recipe, item: string) => r.inputs.reduce((n, i) => n + i.count, 0) / yieldOf(r, item);
+  // then recipes whose main output is the item, then cheapest per unit
+  // (an alchemy mix counts as its usual three ingredients).
+  const cost = (r: Recipe, item: string) =>
+    (r.runes ? 3 : r.inputs.reduce((n, i) => n + i.count, 0)) / yieldOf(r, item);
   for (const [item, list] of producers) {
     list.sort(
       (a, b) =>
@@ -42,11 +49,61 @@ export function buildIndex(data: GameData): Index {
         a.id.localeCompare(b.id),
     );
   }
-  return { data, recipes, producers };
+  const mixes = new Map(Object.entries(data.alchemyMixes ?? {}));
+  return { data, recipes, producers, mixes };
 }
 
 /** Makes items from nothing: automated gathering, not a craft to plan. */
-export const isProduction = (r: Recipe) => r.inputs.length === 0;
+export const isProduction = (r: Recipe) => r.inputs.length === 0 && !r.runes;
+
+/** What the planner knows about the player, beyond the list. */
+export interface Context {
+  have?: Record<string, number>;
+  available?: Available;
+  /** Mix ids already made in game (from the save). */
+  knownMixes?: Set<string>;
+}
+
+/**
+ * The mix used for an alchemy recipe: the chosen one, else the best one —
+ * ingredients in stock first, then mixes already made in game, then fewest
+ * crafted ingredients, then fewest ingredients.
+ */
+export function chosenMix(idx: Index, r: Recipe, choices: Record<string, string>, ctx: Context = {}): Mix | undefined {
+  const mixes = idx.mixes.get(r.id) ?? [];
+  const picked = choices[mixKey(r.id)];
+  const found = picked ? mixes.find((m) => m.id === picked) : undefined;
+  if (found) return found;
+  const have = ctx.have ?? {};
+  const score = (m: Mix) => [
+    m.items.filter((i) => !((have[i] ?? 0) > 0)).length,
+    ctx.knownMixes?.has(m.id) ? 0 : 1,
+    m.items.filter((i) => idx.producers.has(i)).length,
+    m.items.length,
+  ];
+  let best: Mix | undefined;
+  let bestScore: number[] = [];
+  for (const m of mixes) {
+    const s = score(m);
+    if (!best || lexLess(s, bestScore)) {
+      best = m;
+      bestScore = s;
+    }
+  }
+  return best;
+}
+
+/** Lexicographic `a < b` on equal-length number tuples. */
+function lexLess(a: number[], b: number[]): boolean {
+  const i = a.findIndex((v, k) => v !== b[k]);
+  return i >= 0 && a[i] < b[i];
+}
+
+/** A recipe's ingredients; for alchemy, those of its mix (one of each). */
+export function inputsOf(idx: Index, r: Recipe, choices: Record<string, string>, ctx: Context = {}): Stack[] {
+  if (!r.runes) return r.inputs;
+  return (chosenMix(idx, r, choices, ctx)?.items ?? []).map((item) => ({ item, count: 1 }));
+}
 
 /** Whether the player can use a recipe (from their save); all by default. */
 export type Available = (r: Recipe) => boolean;
@@ -102,13 +159,10 @@ const add = (m: Map<string, number>, k: string, v: number) => m.set(k, (m.get(k)
 /** Crafts needed for `need` items when one craft yields `per`. */
 const craftsFor = (need: number, per: number) => Math.ceil(need / per - 1e-9);
 
-export function plan(
-  idx: Index,
-  entries: ListEntry[],
-  choices: Record<string, string> = {},
-  have: Record<string, number> = {},
-  available: Available = ALL,
-): Plan {
+export function plan(idx: Index, entries: ListEntry[], choices: Record<string, string> = {}, ctx: Context = {}): Plan {
+  const have = ctx.have ?? {};
+  const available = ctx.available ?? ALL;
+  const inputs = (r: Recipe) => inputsOf(idx, r, choices, ctx);
   const p: Plan = {
     raw: new Map(),
     groups: new Map(),
@@ -135,12 +189,13 @@ export function plan(
       return;
     }
     state.set(s.item, "open");
-    recipeOf(s.item)?.inputs.forEach(visit);
+    const r = recipeOf(s.item);
+    if (r) inputs(r).forEach(visit);
     state.set(s.item, "done");
     order.push(s.item);
   };
   const roots = entries.map((e) => ({ e, r: idx.recipes.get(e.recipe) })).filter((x) => x.r && x.e.count > 0);
-  roots.forEach(({ r }) => r!.inputs.forEach(visit));
+  roots.forEach(({ r }) => inputs(r!).forEach(visit));
   order.reverse();
 
   // 2. Push demand down in that order, rounding crafts up per item.
@@ -148,7 +203,7 @@ export function plan(
   const record = (r: Recipe, crafts: number, item?: string): Step => {
     for (const [k, v] of Object.entries(r.points ?? {})) p.points[k] = (p.points[k] ?? 0) + v * crafts;
     p.time += (r.time ?? 0) * crafts;
-    for (const i of r.inputs) add(i.group ? p.groups : demand, i.item, i.count * crafts);
+    for (const i of inputs(r)) add(i.group ? p.groups : demand, i.item, i.count * crafts);
     // List entries keep all their outputs: those are what was asked for.
     if (item !== undefined) {
       for (const o of r.outputs) if (o.item !== item && o.chance === undefined) add(p.surplus, o.item, o.count * crafts);
@@ -197,13 +252,9 @@ export interface TreeNode {
 const MAX_DEPTH = 16;
 
 /** Unaggregated tree of a recipe: each branch rounds its own crafts. */
-export function tree(
-  idx: Index,
-  recipe: Recipe,
-  crafts: number,
-  choices: Record<string, string> = {},
-  available: Available = ALL,
-): TreeNode[] {
+export function tree(idx: Index, recipe: Recipe, crafts: number, choices: Record<string, string> = {}, ctx: Context = {}): TreeNode[] {
+  const available = ctx.available ?? ALL;
+  const inputs = (r: Recipe) => inputsOf(idx, r, choices, ctx);
   const expand = (s: Stack, qty: number, path: Set<string>): TreeNode => {
     if (s.group) return { item: s.item, qty, group: true, children: [] };
     if (path.has(s.item) || path.size > MAX_DEPTH) return { item: s.item, qty, cycle: true, children: [] };
@@ -211,7 +262,7 @@ export function tree(
     if (!r) return { item: s.item, qty, children: [] };
     const c = craftsFor(qty, yieldOf(r, s.item));
     const next = new Set(path).add(s.item);
-    return { item: s.item, qty, recipe: r, crafts: c, children: r.inputs.map((i) => expand(i, i.count * c, next)) };
+    return { item: s.item, qty, recipe: r, crafts: c, children: inputs(r).map((i) => expand(i, i.count * c, next)) };
   };
-  return recipe.inputs.map((i) => expand(i, i.count * crafts, new Set()));
+  return inputs(recipe).map((i) => expand(i, i.count * crafts, new Set()));
 }

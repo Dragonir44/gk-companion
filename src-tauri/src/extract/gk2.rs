@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, HashMap};
 use serde_json::Value;
 
 use super::{entity, expr, item_entity, flag, list, num, referenced_objects, text, Names, Normalized};
-use crate::model::{Recipe, RecipeKind, ReputationLock, Stack, Tech};
+use crate::model::{Mix, Recipe, RecipeKind, ReputationLock, Stack, Tech};
 
 /// `BuildingDef.buildingMode` for removal entries (`*_r`), not constructions.
 const BUILDING_MODE_REMOVE: i64 = 2;
@@ -60,6 +60,60 @@ fn outputs(v: Option<&Value>) -> Vec<Stack> {
 }
 
 const TOWN_CRAFT_PREFIX: &str = "town_building_craft:";
+const ALCHEMY_PREFIX: &str = "alchemy:";
+
+/// Recipe id of an alchemy formula (formula ids are their output's item id).
+pub fn alchemy_id(formula: &str) -> String {
+    format!("{ALCHEMY_PREFIX}{formula}")
+}
+
+fn rune_count(v: &Value, field: &str) -> u32 {
+    v.get(field)
+        .and_then(|f| if f.is_object() { value(Some(f)) } else { f.as_f64() })
+        .map_or(0, |n| n.max(0.0) as u32)
+}
+
+fn runes(v: &Value) -> [u32; 3] {
+    [rune_count(v, "runesRed"), rune_count(v, "runesGreen"), rune_count(v, "runesBlue")]
+}
+
+/// One recipe per alchemy formula, and the mixes that make each one.
+fn alchemy(b: &Value) -> (Vec<Recipe>, BTreeMap<String, Vec<Mix>>) {
+    let recipes = list(b, "alchemyFormulaDefs")
+        .iter()
+        .map(|f| {
+            let id = text(f, "id");
+            Recipe {
+                id: alchemy_id(id),
+                name: None,
+                icon: None,
+                kind: RecipeKind::Craft,
+                stations: super::strings(f, &["craftsIn"]),
+                inputs: vec![],
+                outputs: vec![Stack { item: id.to_string(), count: 1.0, group: false, chance: None, expr: None }],
+                points: BTreeMap::new(),
+                time: None,
+                energy: None,
+                builds: None,
+                hidden: false,
+                // Formulas are unlocked by research (or revealed in game).
+                needs_unlock: true,
+                runes: Some(runes(f)),
+            }
+        })
+        .collect();
+    let mut mixes: BTreeMap<String, Vec<Mix>> = BTreeMap::new();
+    for m in list(b, "alchemyMixSourceDefs") {
+        let items = ["ingredient1", "ingredient2", "ingredient3"]
+            .iter()
+            .map(|k| text(m, k))
+            .filter(|i| !i.is_empty())
+            .map(str::to_string)
+            .collect();
+        mixes.entry(alchemy_id(text(m, "formulaId"))).or_default().push(Mix { id: text(m, "mixId").to_string(), items });
+    }
+    (recipes, mixes)
+}
 
 /// Town shops and houses, one recipe per level (`Pharmacy_t1`..`_t3`,
 /// named "Apothicaire", "Apothicaire II"...). Level 1 is built at a
@@ -92,6 +146,7 @@ fn town_buildings(b: &Value, names: &mut Names) -> Vec<Recipe> {
                 builds: None,
                 hidden: false,
                 needs_unlock: flag(t, "isNeedsUnlock"),
+                runes: None,
             }
         })
         .collect()
@@ -145,6 +200,7 @@ pub fn normalize(b: &Value, names: &mut Names) -> Normalized {
             builds: None,
             hidden: flag(c, "isHidden"),
             needs_unlock: flag(c, "isNeedsUnlock"),
+            runes: None,
         });
     }
 
@@ -167,20 +223,19 @@ pub fn normalize(b: &Value, names: &mut Names) -> Normalized {
             builds: (!out.is_empty()).then(|| out.to_string()),
             hidden: false,
             needs_unlock: flag(c, "isNeedsUnlock"),
+            runes: None,
         });
     }
 
-    // Crafts named after an alchemy formula carry no station: the game
-    // makes them where the formula is mixed (the alchemy lab).
-    let formula_stations: HashMap<&str, Vec<String>> = list(b, "alchemyFormulaDefs")
-        .iter()
-        .map(|f| (text(f, "id"), super::strings(f, &["craftsIn"])))
-        .collect();
-    for r in recipes.iter_mut().filter(|r| r.stations.is_empty()) {
-        if let Some(st) = formula_stations.get(r.id.as_str()) {
-            r.stations = st.clone();
-        }
+    // Alchemy: the lab makes formulas from any mix whose runes add up.
+    // Crafts with a formula's name but no station (rich elixir + cinnabar
+    // for the miracle elixir...) are not how the game makes them: hidden.
+    let formulas: Vec<&str> = list(b, "alchemyFormulaDefs").iter().map(|f| text(f, "id")).collect();
+    for r in recipes.iter_mut().filter(|r| r.stations.is_empty() && formulas.contains(&r.id.as_str())) {
+        r.hidden = true;
     }
+    let (alchemy, alchemy_mixes) = alchemy(b);
+    recipes.extend(alchemy);
 
     // Town signboards (`t_b_signboard_house`) share the texts of the plots
     // they stand on (`repair_sign_house`: "Logement").
@@ -209,6 +264,7 @@ pub fn normalize(b: &Value, names: &mut Names) -> Normalized {
                 .filter(|(_, v)| *v != 0.0)
                 .collect();
             let mut unlocks = super::strings(t, &["craftsAfterUnlock"]);
+            unlocks.extend(super::strings(t, &["alchemyFormulasAfterUnlock"]).iter().map(|f| alchemy_id(f)));
             unlocks.extend(super::strings(t, &["buildingsAfterUnlock"]));
             Tech {
                 id: id.to_string(),
@@ -236,7 +292,9 @@ pub fn normalize(b: &Value, names: &mut Names) -> Normalized {
         for g in super::strings(i, &["itemGroupIds"]) {
             groups.entry(g).or_default().push(id.to_string());
         }
-        items.push(item_entity(names, i, "itemSize", "iconId"));
+        let mut e = item_entity(names, i, "itemSize", "iconId");
+        e.runes = Some(runes(i)).filter(|r| r.iter().any(|&n| n > 0));
+        items.push(e);
     }
     // Group ids appear as ingredients, so they get names like items.
     items.extend(groups.keys().map(|g| entity(names, g)));
@@ -255,5 +313,5 @@ pub fn normalize(b: &Value, names: &mut Names) -> Normalized {
         .map(|id| (id, TECH_TABS.get(id as usize).map(|n| format!("tech_tab_{n}")).unwrap_or_default()))
         .collect();
 
-    Normalized { items, objects, groups, recipes, techs, branches, object_icons }
+    Normalized { items, objects, groups, recipes, techs, branches, object_icons, alchemy_mixes }
 }

@@ -28,6 +28,7 @@ export function unlocks(p: Progress | undefined, techs: Tech[]): Unlocks {
   const crafts = set("unlockedCrafts");
   const buildings = set("unlockedBuildings");
   const blacklist = set("blackListCrafts");
+  const formulas = p.lists.unlockedAlchemyFormulas ? set("unlockedAlchemyFormulas") : undefined;
   const byId = new Map(techs.map((t) => [t.id, t]));
   return {
     techState: (t) =>
@@ -41,6 +42,8 @@ export function unlocks(p: Progress | undefined, techs: Tech[]): Unlocks {
       !unlockedTechs.has(t.id) && (hiddenTechs ? hiddenTechs.has(t.id) : t.hidden && !revealedTechs.has(t.id)),
     recipeUnlocked: (r) => {
       if (blacklist.has(r.id)) return false;
+      // Alchemy recipes are `alchemy:<formula>`; the save lists formulas.
+      if (r.runes) return !formulas || formulas.has(r.id.replace(/^alchemy:/, ""));
       if (!r.needsUnlock) return true;
       // gk1 unlocks buildings through its craft list.
       return crafts.has(r.id) || (r.kind === "building" && buildings.has(r.id));

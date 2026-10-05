@@ -98,6 +98,11 @@ const fr = {
   inStock: "En stock",
   expandAll: "Tout déplier",
   collapseAll: "Tout replier",
+  mixPick: "Choisir le mélange (runes)",
+  mixSearch: "Filtrer par ingrédient…",
+  mixes: "mélanges",
+  mixKnown: "déjà fait",
+  mixKnownHint: "Mélange déjà réalisé dans ta partie",
   manualFolder: "dossier choisi",
 } as const;
 
@@ -200,6 +205,11 @@ const en: Strings = {
   inStock: "In stock",
   expandAll: "Expand all",
   collapseAll: "Collapse all",
+  mixPick: "Choose the mix (runes)",
+  mixSearch: "Filter by ingredient…",
+  mixes: "mixes",
+  mixKnown: "made before",
+  mixKnownHint: "Mix already made in your game",
   manualFolder: "chosen folder",
 };
 

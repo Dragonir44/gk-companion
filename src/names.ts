@@ -29,12 +29,15 @@ function quality(id: string): string {
 
 const TALENT_MARKS: Record<string, string> = { red: "🔴", green: "🟢", blue: "🔵", orange: "🟠", yellow: "🟡" };
 
+const RUNE_MARKS: Record<string, string> = { r: "🔴", g: "🟢", b: "🔵" };
+
 /** Game texts embed TextMeshPro sprites (gk2 talent colours) and tags. */
 function clean(t: string): string {
   return t
     // Some texts carry escapes literally ("Fournitures\u00A0: ...").
     .replace(/\\u([0-9a-fA-F]{4})/g, (_, h) => String.fromCharCode(parseInt(h, 16)))
     .replace(/<sprite name="talent_(\w+)">/g, (_, c) => TALENT_MARKS[c] ?? "")
+    .replace(/<sprite name="rune_([rgb])">/g, (_, c) => RUNE_MARKS[c])
     .replace(/<sprite[^>]*>|<\/?(b|i|u|color|size)(=[^>]*)?>/g, "")
     .replace(/\s+/g, " ")
     .trim();

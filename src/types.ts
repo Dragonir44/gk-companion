@@ -10,6 +10,8 @@ export interface Entity {
   desc?: string;
   heavy?: boolean;
   icon?: string;
+  /** Alchemy runes [red, green, blue] (gk2). */
+  runes?: [number, number, number];
 }
 
 export interface Stack {
@@ -34,6 +36,14 @@ export interface Recipe {
   builds?: string;
   hidden: boolean;
   needsUnlock: boolean;
+  /** Alchemy formula: runes [red, green, blue] its mix must total. */
+  runes?: [number, number, number];
+}
+
+/** One valid alchemy mix: one of each item. */
+export interface Mix {
+  id: string;
+  items: string[];
 }
 
 export interface Tech {
@@ -72,6 +82,8 @@ export interface GameData {
   branches: Branch[];
   locales: Record<string, Record<string, string>>;
   icons: IconIndex;
+  /** Alchemy recipe id -> mixes that make it. */
+  alchemyMixes?: Record<string, Mix[]>;
 }
 
 export interface IconIndex {

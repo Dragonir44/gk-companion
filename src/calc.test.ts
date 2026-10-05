@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildIndex, plan, RAW, tree } from "./calc";
+import { buildIndex, isProduction, mixKey, plan, RAW, tree } from "./calc";
 import type { GameData, Recipe } from "./types";
 
 const r = (id: string, inputs: [string, number][], outputs: [string, number][], extra: Partial<Recipe> = {}): Recipe => ({
@@ -63,7 +63,7 @@ describe("plan", () => {
   it("honours raw choices and owned items", () => {
     const idx = buildIndex(basic);
     expect(Object.fromEntries(plan(idx, [{ recipe: "crate", count: 1 }], { nails: RAW }).raw)).toEqual({ plank: 1, nails: 2 });
-    const p = plan(idx, [{ recipe: "crate", count: 1 }], {}, { nails: 5, plank: 1 });
+    const p = plan(idx, [{ recipe: "crate", count: 1 }], {}, { have: { nails: 5, plank: 1 } });
     expect(Object.fromEntries(p.raw)).toEqual({});
     expect(Object.fromEntries(p.used)).toEqual({ nails: 2, plank: 1 });
   });
@@ -111,9 +111,48 @@ describe("available recipes", () => {
     const idx = buildIndex(g);
     // nails_cheap is the cheapest, but locked: the unlocked one is used.
     const locked = new Set(["nails_cheap"]);
-    const p = plan(idx, [{ recipe: "crate", count: 1 }], {}, {}, (x) => !locked.has(x.id));
+    const p = plan(idx, [{ recipe: "crate", count: 1 }], {}, { available: (x) => !locked.has(x.id) });
     expect(p.steps.map((s) => s.recipe.id)).toContain("nails");
     expect(plan(idx, [{ recipe: "crate", count: 1 }]).steps.map((s) => s.recipe.id)).toContain("nails_cheap");
+  });
+});
+
+describe("alchemy", () => {
+  const lab = (extra: Partial<GameData> = {}) => {
+    const g = game([
+      { ...r("alchemy:elixir", [], [["elixir", 1]]), runes: [1, 5, 0] },
+      r("flour", [["wheat", 2]], [["flour", 1]]),
+      r("fert", [["elixir", 1], ["peat", 8]], [["fert", 1]]),
+    ]);
+    g.alchemyMixes = {
+      "alchemy:elixir": [
+        { id: "mix:flour:fragrance:clay", items: ["clay", "flour", "fragrance"] },
+        { id: "mix:stick:coal:flax", items: ["stick", "coal", "flax"] },
+      ],
+    };
+    return { ...g, ...extra };
+  };
+
+  it("makes a formula from a mix, preferring raw ingredients", () => {
+    const p = plan(buildIndex(lab()), [{ recipe: "fert", count: 1 }]);
+    // flour is crafted: the all-raw mix wins.
+    expect(Object.fromEntries(p.raw)).toEqual({ peat: 8, stick: 1, coal: 1, flax: 1 });
+    expect(p.steps.find((s) => s.item === "elixir")?.recipe.id).toBe("alchemy:elixir");
+  });
+
+  it("prefers mixes in stock, then mixes known in game, and honours a chosen mix", () => {
+    const idx = buildIndex(lab());
+    const inStock = plan(idx, [{ recipe: "fert", count: 1 }], {}, { have: { clay: 1, flour: 1, fragrance: 1 } });
+    expect(inStock.raw.has("stick")).toBe(false);
+    const known = plan(idx, [{ recipe: "fert", count: 1 }], {}, { knownMixes: new Set(["mix:flour:fragrance:clay"]) });
+    expect(Object.fromEntries(known.raw)).toMatchObject({ clay: 1, fragrance: 1, wheat: 2 });
+    const chosen = plan(idx, [{ recipe: "fert", count: 1 }], { [mixKey("alchemy:elixir")]: "mix:flour:fragrance:clay" });
+    expect(chosen.raw.has("fragrance")).toBe(true);
+  });
+
+  it("is never taken for a zero-input production", () => {
+    const idx = buildIndex(lab());
+    expect(isProduction(idx.recipes.get("alchemy:elixir")!)).toBe(false);
   });
 });
 

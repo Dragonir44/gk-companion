@@ -55,6 +55,7 @@ pub struct Normalized {
     pub branches: Vec<(i64, String)>,
     /// Icon sprite per world object id, when the game names one.
     pub object_icons: HashMap<String, String>,
+    pub alchemy_mixes: BTreeMap<String, Vec<crate::model::Mix>>,
 }
 
 /// Extraction result; icons are optional: data stays usable without them.
@@ -235,6 +236,7 @@ pub fn extract(game: GameId, root: &Path, build_id: Option<&str>) -> Result<Extr
         branches,
         locales: names.filter_locales(locales),
         icons: icon_index,
+        alchemy_mixes: n.alchemy_mixes,
     };
     Ok(Extracted { data, icons: icon_set, icons_error })
 }
@@ -377,7 +379,7 @@ fn flag(v: &Value, key: &str) -> bool {
 fn entity(names: &mut Names, id: &str) -> Entity {
     let name = names.name(id);
     let desc = name.as_deref().and_then(|k| names.desc(k));
-    Entity { id: id.to_string(), name, desc, heavy: false, icon: None }
+    Entity { id: id.to_string(), name, desc, heavy: false, icon: None, runes: None }
 }
 
 /// Recipes often use an item without its quality suffix (`meal:burger`)

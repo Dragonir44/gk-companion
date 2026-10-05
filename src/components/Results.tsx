@@ -5,17 +5,18 @@ import { useActiveList, useStore } from "../store";
 import type { CraftList } from "../types";
 import { fmtNum, Points, useGame } from "./ctx";
 import { Icon } from "./Icon";
+import { MixChoice, runeText } from "./MixChoice";
 import { LockBadge } from "./Search";
 
 type Tab = "materials" | "crafting";
 
 export function Results() {
-  const { t, idx, available } = useGame();
+  const { t, idx, available, knownMixes } = useGame();
   const list = useActiveList();
   const [tab, setTab] = useState<Tab>("materials");
   const p = useMemo(
-    () => (list ? plan(idx, list.entries, list.choices, list.have, available) : undefined),
-    [idx, list, available],
+    () => (list ? plan(idx, list.entries, list.choices, { have: list.have, available, knownMixes }) : undefined),
+    [idx, list, available, knownMixes],
   );
 
   if (!list || !p || !list.entries.length) return <section className="panel results-panel" />;
@@ -135,7 +136,7 @@ function Materials({ p, list }: { p: Plan; list: CraftList }) {
 
 /** The crafting tree of each list entry, with choices inline. */
 function Crafting({ list }: { list: CraftList }) {
-  const { t, n, idx, available } = useGame();
+  const { t, n, idx, available, knownMixes } = useGame();
   // Bumping the key remounts the tree with every node open or closed.
   const [expand, setExpand] = useState<{ open: boolean; key: number }>({ open: true, key: 0 });
   return (
@@ -160,7 +161,8 @@ function Crafting({ list }: { list: CraftList }) {
               <span className="craft-where muted">{n.station(r) ?? (r.kind === "craft" ? t.anywhere : "")}</span>
             </summary>
             <ul>
-              {tree(idx, r, e.count, list.choices, available).map((node, i) => (
+              {r.runes && <MixChoice recipe={r} />}
+              {tree(idx, r, e.count, list.choices, { have: list.have, available, knownMixes }).map((node, i) => (
                 <CraftNode key={i} node={node} list={list} open={expand.open} />
               ))}
             </ul>
@@ -190,6 +192,7 @@ function CraftNode({ node, list, open }: { node: TreeNode; list: CraftList; open
         {node.recipe ? `${node.crafts}× ${n.station(node.recipe) ?? t.anywhere}` : node.group ? "" : t.gathered}
       </span>
       <span className="craft-controls" onClick={(e) => e.preventDefault()}>
+        {node.recipe?.runes && <MixChoice recipe={node.recipe} />}
         {!node.group && idx.producers.has(node.item) && <ItemChoice item={node.item} compact />}
         {!node.group && (
           <input
@@ -229,7 +232,11 @@ function ItemChoice({ item, compact }: { item: string; compact?: boolean }) {
   if (!producers.length || !list) return null;
   const current = chosenRecipe(idx, item, list.choices, available)?.id ?? RAW;
   const label = (r: (typeof producers)[number]) =>
-    [n.station(r) ?? t.anywhere, isProduction(r) ? `(${t.production})` : "", r.inputs.map((i) => `${i.count} ${n.name(i.item)}`).join(" + ")]
+    [
+      n.station(r) ?? t.anywhere,
+      isProduction(r) ? `(${t.production})` : "",
+      r.runes ? runeText(r.runes) : r.inputs.map((i) => `${i.count} ${n.name(i.item)}`).join(" + "),
+    ]
       .filter(Boolean)
       .join(" ");
 

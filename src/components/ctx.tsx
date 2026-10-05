@@ -18,6 +18,8 @@ export interface Ctx {
   available: Available;
   /** Recipe id -> techs unlocking it. */
   unlockers: Map<string, Tech[]>;
+  /** Alchemy mixes already made in game (from the save). */
+  knownMixes: Set<string>;
 }
 
 export const GameCtx = createContext<Ctx | null>(null);
