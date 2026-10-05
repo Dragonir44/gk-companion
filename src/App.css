@@ -1053,3 +1053,53 @@ li.craft-row.leaf {
   width: 330px;
   max-width: calc(100vw - 48px);
 }
+.stock-tag {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  cursor: help;
+}
+.stock-toggle {
+  margin-bottom: 6px;
+}
+.unreachable {
+  color: var(--danger);
+  font-size: 11px;
+}
+
+/* --- Stock view -------------------------------------------------------- */
+
+.stock-view {
+  flex: 1;
+}
+.stock-header {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.stock-header .search-input {
+  max-width: 360px;
+}
+.stock-header .tabs {
+  border: none;
+  padding: 0;
+}
+.stock-body {
+  flex: 1;
+  overflow-y: auto;
+}
+.stock-places {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+}
+.stock-place {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  background: var(--panel-2);
+}
+.stock-place h3 {
+  margin: 0 0 6px;
+  font-size: 13px;
+}

@@ -150,6 +150,17 @@ describe("alchemy", () => {
     expect(chosen.raw.has("fragrance")).toBe(true);
   });
 
+  it("avoids ingredients the player can't get, and hides them when strict", () => {
+    const idx = buildIndex(lab());
+    // Pretend stick/coal/flax are unobtainable (e.g. shop-only powders).
+    const obtainable = (i: string) => !["stick", "coal", "flax"].includes(i);
+    const p = plan(idx, [{ recipe: "fert", count: 1 }], {}, { obtainable });
+    expect(p.raw.has("fragrance")).toBe(true);
+    // Strict, and nothing obtainable: falls back to every mix.
+    const none = plan(idx, [{ recipe: "fert", count: 1 }], {}, { obtainable: () => false, strict: true });
+    expect(none.steps.some((s) => s.recipe.id === "alchemy:elixir")).toBe(true);
+  });
+
   it("is never taken for a zero-input production", () => {
     const idx = buildIndex(lab());
     expect(isProduction(idx.recipes.get("alchemy:elixir")!)).toBe(false);

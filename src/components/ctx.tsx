@@ -1,7 +1,7 @@
 import { createContext, useContext } from "react";
 
 import type { Available, Index } from "../calc";
-import type { Unlocks } from "../progress";
+import type { Stock, Unlocks } from "../progress";
 import type { Tech } from "../types";
 import type { Strings } from "../i18n";
 import type { Namer } from "../names";
@@ -20,6 +20,17 @@ export interface Ctx {
   unlockers: Map<string, Tech[]>;
   /** Alchemy mixes already made in game (from the save). */
   knownMixes: Set<string>;
+  /** Stored items from the save (empty when not used). */
+  stock: Stock;
+  /** Can the player get this item now? Undefined without a save. */
+  obtainable?: (item: string) => boolean;
+  /** "Only what I can make" is on. */
+  strict: boolean;
+}
+
+/** Owned quantities: the save's stock, overridden by what was typed. */
+export function ownedFor(stock: Stock, typed: Record<string, number>): Record<string, number> {
+  return { ...stock.total, ...typed };
 }
 
 export const GameCtx = createContext<Ctx | null>(null);

@@ -15,6 +15,8 @@ pub enum Entry {
     StartArray,
     EndArray,
     Str(Option<String>, String),
+    /// Integer values (int, uint, long, ulong).
+    Int(Option<String>, i64),
     /// Any other value, skipped.
     Other(Option<String>),
     EndOfStream,
@@ -144,11 +146,15 @@ impl<'a> Reader<'a> {
                 self.take(2)?;
                 Entry::Other(name)
             }
-            0x17 | 0x19 | 0x1F => {
+            0x17 => Entry::Int(name, i32::from_le_bytes(self.take(4)?.try_into().unwrap()) as i64),
+            0x19 => Entry::Int(name, u32::from_le_bytes(self.take(4)?.try_into().unwrap()) as i64),
+            0x1B => Entry::Int(name, i64::from_le_bytes(self.take(8)?.try_into().unwrap())),
+            0x1D => Entry::Int(name, u64::from_le_bytes(self.take(8)?.try_into().unwrap()) as i64),
+            0x1F => {
                 self.take(4)?;
                 Entry::Other(name)
             }
-            0x1B | 0x1D | 0x21 => {
+            0x21 => {
                 self.take(8)?;
                 Entry::Other(name)
             }
@@ -219,7 +225,7 @@ mod tests {
             got,
             vec![
                 Entry::Start(None, Some("GameSave".into())),
-                Entry::Other(Some("day".into())),
+                Entry::Int(Some("day".into()), 189),
                 Entry::Start(Some("list".into()), Some("GameSave".into())),
                 Entry::StartArray,
                 Entry::Str(None, "wood_basic".into()),

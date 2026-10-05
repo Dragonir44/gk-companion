@@ -138,7 +138,7 @@ pub fn normalize(b: &Value, names: &mut Names) -> Normalized {
         .collect();
 
     let items = list(b, "items_data").iter().map(|i| item_entity(names, i, "item_size", "icon")).collect();
-    let objects = referenced_objects(&recipes, names);
+    let objects = referenced_objects(&recipes, &[], names);
 
     // Branch names are `tbranch_<id>`.
     let branches = list(b, "tech_branches_data")
@@ -147,5 +147,5 @@ pub fn normalize(b: &Value, names: &mut Names) -> Normalized {
         .map(|id| (id, format!("tbranch_{id}")))
         .collect();
 
-    Normalized { items, objects, groups: BTreeMap::new(), recipes, techs, branches, object_icons: Default::default(), alchemy_mixes: Default::default() }
+    Normalized { items, objects, groups: BTreeMap::new(), recipes, techs, branches, object_icons: Default::default(), alchemy_mixes: Default::default(), zones: vec![], storage: vec![] }
 }

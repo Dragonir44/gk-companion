@@ -103,6 +103,16 @@ const fr = {
   mixes: "mélanges",
   mixKnown: "déjà fait",
   mixKnownHint: "Mélange déjà réalisé dans ta partie",
+  mixesHidden: "ingrédients hors de portée masqués",
+  unreachable: "Ni en stock, ni fabricable avec tes recettes débloquées",
+  useStock: "Compter mes coffres",
+  useStockHint: "Déduit ce que ta sauvegarde a en stock (coffres, réserves, inventaire). Ce que tu tapes dans « J'ai » reste prioritaire.",
+  stockView: "Stocks",
+  stockSearch: "Rechercher un objet…",
+  stockNone: "Les stocks viennent de la sauvegarde suivie (Graveyard Keeper 2).",
+  stockTotal: "Total",
+  stockByPlace: "Par emplacement",
+  onMe: "Sur moi",
   manualFolder: "dossier choisi",
 } as const;
 
@@ -210,6 +220,16 @@ const en: Strings = {
   mixes: "mixes",
   mixKnown: "made before",
   mixKnownHint: "Mix already made in your game",
+  mixesHidden: "out-of-reach ingredients hidden",
+  unreachable: "Not in stock, and no unlocked recipe makes it",
+  useStock: "Count my chests",
+  useStockHint: "Subtracts what your save has stored (chests, containers, inventory). What you type in “Owned” wins.",
+  stockView: "Stocks",
+  stockSearch: "Search an item…",
+  stockNone: "Stocks come from the followed save (Graveyard Keeper 2).",
+  stockTotal: "Total",
+  stockByPlace: "By place",
+  onMe: "On me",
   manualFolder: "chosen folder",
 };
 

@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 /// Bump when the model changes, so stale caches are re-extracted.
-pub const MODEL_VERSION: u32 = 10;
+pub const MODEL_VERSION: u32 = 11;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -43,6 +43,9 @@ pub struct GameData {
     pub techs: Vec<Tech>,
     /// Research tree tabs, in game order.
     pub branches: Vec<Branch>,
+    /// World zones (where stored items are), gk2.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub zones: Vec<Entity>,
     /// Language -> text key -> text. Only keys referenced by entities.
     pub locales: BTreeMap<String, BTreeMap<String, String>>,
     #[serde(default)]
@@ -252,6 +255,7 @@ mod tests {
             recipes: vec![recipe],
             techs: vec![tech],
             branches: vec![Branch { id: 0, name: None }],
+            zones: vec![],
             locales: BTreeMap::new(),
             icons: IconIndex::default(),
             alchemy_mixes: BTreeMap::new(),

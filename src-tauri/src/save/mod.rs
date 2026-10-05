@@ -5,6 +5,7 @@
 //! serialization (see `gk1`). Both yield the same list names.
 
 pub mod gk1;
+pub mod inventory;
 pub mod odin;
 
 use std::collections::BTreeMap;
@@ -62,6 +63,8 @@ pub struct Progress {
     pub slot: String,
     pub modified: u64,
     pub lists: BTreeMap<String, Vec<String>>,
+    /// Stored items, per container (gk2; empty for gk1 for now).
+    pub inventories: Vec<inventory::Container>,
 }
 
 pub fn supported(game: GameId) -> bool {
@@ -133,11 +136,11 @@ pub fn read_progress(game: GameId, slot: &SaveSlot) -> Result<Progress, SaveErro
         return Err(SaveError::Unsupported);
     }
     let bytes = std::fs::read(&slot.path)?;
-    let lists = match game {
-        GameId::Gk1 => gk1::progress_lists(&bytes)?,
-        GameId::Gk2 => knowledge_lists(&bytes)?,
+    let (lists, inventories) = match game {
+        GameId::Gk1 => (gk1::progress_lists(&bytes)?, vec![]),
+        GameId::Gk2 => (knowledge_lists(&bytes)?, inventory::containers(&bytes)?),
     };
-    Ok(Progress { slot: slot.id.clone(), modified: slot.modified, lists })
+    Ok(Progress { slot: slot.id.clone(), modified: slot.modified, lists, inventories })
 }
 
 /// String lists directly under `knowledgeSystem/<field>`.
@@ -165,7 +168,7 @@ fn knowledge_lists(bytes: &[u8]) -> Result<BTreeMap<String, Vec<String>>, SaveEr
                     }
                 }
             }
-            Entry::Str(Some(_), _) | Entry::Other(_) => {}
+            Entry::Str(Some(_), _) | Entry::Int(..) | Entry::Other(_) => {}
             Entry::EndOfStream => break,
         }
     }

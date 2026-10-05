@@ -36,6 +36,10 @@ interface State {
   showSpoilers: boolean;
   /** Planner column widths in px (search, list); results take the rest. */
   columns: [number, number];
+  /** Count what the followed save has in its chests as owned. */
+  useStock: boolean;
+  /** Only offer what the player can make/get now (needs a save). */
+  onlyAvailable: boolean;
   statuses: GameStatus[];
   games: Partial<Record<GameId, GameState>>;
   lists: CraftList[];
@@ -54,6 +58,8 @@ interface State {
   setView(v: View): void;
   setShowSpoilers(v: boolean): void;
   setColumns(c: [number, number]): void;
+  setUseStock(v: boolean): void;
+  setOnlyAvailable(v: boolean): void;
   refreshSaves(game: GameId): Promise<void>;
   setSaveChoice(game: GameId, choice: string | undefined): void;
 
@@ -92,6 +98,8 @@ export const useStore = create<State>((set, get) => {
           showSpoilers: s.showSpoilers,
           saveChoice: s.saveChoice,
           columns: s.columns,
+          useStock: s.useStock,
+          onlyAvailable: s.onlyAvailable,
         },
       };
       invoke("save_lists", { lists: file }).catch((e) => console.error("save_lists", e));
@@ -127,6 +135,8 @@ export const useStore = create<State>((set, get) => {
     view: "planner",
     showSpoilers: false,
     columns: DEFAULT_COLUMNS,
+    useStock: true,
+    onlyAvailable: false,
     statuses: [],
     games: {},
     lists: [],
@@ -156,6 +166,8 @@ export const useStore = create<State>((set, get) => {
         showSpoilers: prefs.showSpoilers ?? false,
         saveChoice: prefs.saveChoice ?? {},
         columns: prefs.columns ?? DEFAULT_COLUMNS,
+        useStock: prefs.useStock ?? true,
+        onlyAvailable: prefs.onlyAvailable ?? false,
         lists: file?.lists ?? [],
         active: file?.active ?? {},
       });
@@ -218,6 +230,16 @@ export const useStore = create<State>((set, get) => {
 
     setColumns(columns) {
       set({ columns });
+      persist();
+    },
+
+    setUseStock(useStock) {
+      set({ useStock });
+      persist();
+    },
+
+    setOnlyAvailable(onlyAvailable) {
+      set({ onlyAvailable });
       persist();
     },
 

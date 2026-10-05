@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { chosenMix, mixKey } from "../calc";
 import { useActiveList, useStore } from "../store";
 import type { Mix, Recipe } from "../types";
-import { useGame } from "./ctx";
+import { ownedFor, useGame } from "./ctx";
 import { Icon } from "./Icon";
 
 const MARKS = ["🔴", "🟢", "🔵"];
@@ -18,7 +18,7 @@ const fold = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCa
 
 /** Picks the ingredient mix of an alchemy recipe among the game's valid ones. */
 export function MixChoice({ recipe }: { recipe: Recipe }) {
-  const { t, n, idx, knownMixes } = useGame();
+  const { t, n, idx, knownMixes, stock, obtainable, strict } = useGame();
   const list = useActiveList();
   const setChoice = useStore((s) => s.setChoice);
   const [open, setOpen] = useState(false);
@@ -32,10 +32,14 @@ export function MixChoice({ recipe }: { recipe: Recipe }) {
     return () => document.removeEventListener("mousedown", close);
   }, [open]);
 
-  const mixes = idx.mixes.get(recipe.id) ?? [];
-  const have = list?.have ?? {};
-  const current = list ? chosenMix(idx, recipe, list.choices, { have, knownMixes }) : undefined;
-  const fallback = list ? chosenMix(idx, recipe, {}, { have, knownMixes }) : undefined;
+  const allMixes = idx.mixes.get(recipe.id) ?? [];
+  const have = ownedFor(stock, list?.have ?? {});
+  const ctx = { have, knownMixes, obtainable, strict };
+  const current = list ? chosenMix(idx, recipe, list.choices, ctx) : undefined;
+  const fallback = list ? chosenMix(idx, recipe, {}, ctx) : undefined;
+  // "Only what I can make": mixes with an ingredient out of reach are hidden.
+  const reachable = strict && obtainable ? allMixes.filter((m) => m.items.every(obtainable)) : allMixes;
+  const mixes = reachable.length ? reachable : allMixes;
 
   const shown = useMemo(() => {
     const words = fold(query).split(/\s+/).filter(Boolean);
@@ -55,6 +59,11 @@ export function MixChoice({ recipe }: { recipe: Recipe }) {
         <Icon sprite={n.icon(i)} size={18} />
         <span className="mix-item-name">{n.name(i)}</span>
         {(have[i] ?? 0) > 0 && <span className="in-stock">✓</span>}
+        {obtainable && !obtainable(i) && (have[i] ?? 0) === 0 && (
+          <span className="unreachable" title={t.unreachable}>
+            ✕
+          </span>
+        )}
       </span>
     ));
 
@@ -70,6 +79,7 @@ export function MixChoice({ recipe }: { recipe: Recipe }) {
           <input autoFocus placeholder={t.mixSearch} value={query} onChange={(e) => setQuery(e.target.value)} />
           <span className="muted small">
             {shown.length} / {mixes.length} {t.mixes}
+            {mixes.length < allMixes.length && ` · ${t.mixesHidden}`}
           </span>
           <span className="mix-list">
             {shown.slice(0, MAX_SHOWN).map((m) => (

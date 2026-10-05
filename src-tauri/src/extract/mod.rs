@@ -53,6 +53,10 @@ pub struct Normalized {
     pub techs: Vec<Tech>,
     /// Tree tabs: branch id and the text key of its name.
     pub branches: Vec<(i64, String)>,
+    /// World zones, named.
+    pub zones: Vec<Entity>,
+    /// Storage objects (chests...), so stock locations get names.
+    pub storage: Vec<String>,
     /// Icon sprite per world object id, when the game names one.
     pub object_icons: HashMap<String, String>,
     pub alchemy_mixes: BTreeMap<String, Vec<crate::model::Mix>>,
@@ -234,6 +238,7 @@ pub fn extract(game: GameId, root: &Path, build_id: Option<&str>) -> Result<Extr
         recipes: n.recipes,
         techs: n.techs,
         branches,
+        zones: n.zones,
         locales: names.filter_locales(locales),
         icons: icon_index,
         alchemy_mixes: n.alchemy_mixes,
@@ -412,10 +417,11 @@ fn opt_text(v: &Value, key: &str) -> Option<String> {
 }
 
 /// Objects referenced by recipes (stations, built objects), in a stable order.
-fn referenced_objects(recipes: &[Recipe], names: &mut Names) -> Vec<Entity> {
+fn referenced_objects(recipes: &[Recipe], extra: &[String], names: &mut Names) -> Vec<Entity> {
     let mut ids: Vec<&str> = recipes
         .iter()
         .flat_map(|r| r.stations.iter().chain(r.builds.iter()))
+        .chain(extra)
         .map(String::as_str)
         .collect();
     ids.sort_unstable();

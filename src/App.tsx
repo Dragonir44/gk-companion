@@ -10,10 +10,11 @@ import { Resizer } from "./components/Resizer";
 import { Results } from "./components/Results";
 import { SaveSelector } from "./components/SaveSelector";
 import { Search } from "./components/Search";
+import { StockView } from "./components/StockView";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { fmt, LANGUAGES, strings, type Strings } from "./i18n";
 import { namer } from "./names";
-import { unlockedBy, unlocks } from "./progress";
+import { EMPTY_STOCK, stockOf, unlockedBy, unlocks } from "./progress";
 import { DEFAULT_COLUMNS, useStore } from "./store";
 import { GAMES } from "./types";
 import "./App.css";
@@ -67,7 +68,7 @@ function useAppVersion(): string | undefined {
 }
 
 export default function App() {
-  const { ready, game, lang, games, statuses, view, saves, columns } = useStore();
+  const { ready, game, lang, games, statuses, view, saves, columns, useStock, onlyAvailable } = useStore();
   const { init, selectGame, setLang, loadGame, setGamePath, setView, refreshSaves, setColumns } = useStore.getState();
   const progress = saves[game]?.progress;
   const appVersion = useAppVersion();
@@ -95,6 +96,12 @@ export default function App() {
   const ctx = useMemo(() => {
     if (!g?.index) return null;
     const u = unlocks(progress, g.index.data.techs);
+    const idx = g.index;
+    const stock = useStock ? stockOf(progress) : EMPTY_STOCK;
+    // In stock, or made by a recipe the save has unlocked.
+    const obtainable = progress
+      ? (item: string) => (stock.total[item] ?? 0) > 0 || (idx.producers.get(item) ?? []).some(u.recipeUnlocked)
+      : undefined;
     return {
       t,
       n: namer(g.index.data, lang, t.heavy),
@@ -104,8 +111,11 @@ export default function App() {
       available: u.recipeUnlocked,
       unlockers,
       knownMixes: new Set(progress?.lists.knownMixCrafts ?? []),
+      stock,
+      obtainable,
+      strict: onlyAvailable && !!progress,
     };
-  }, [g?.index, lang, t, progress, unlockers]);
+  }, [g?.index, lang, t, progress, unlockers, useStock, onlyAvailable]);
 
   const languages = Object.keys(g?.result?.data.locales ?? LANGUAGES).filter((l) => l in LANGUAGES);
   const status = statuses.find((s) => s.game === game);
@@ -136,9 +146,9 @@ export default function App() {
           ))}
         </nav>
         <nav className="views">
-          {(["planner", "research"] as const).map((v) => (
+          {(["planner", "research", "stock"] as const).map((v) => (
             <button key={v} className={v === view ? "active" : ""} onClick={() => setView(v)}>
-              {t[v]}
+              {v === "stock" ? t.stockView : t[v]}
             </button>
           ))}
         </nav>
@@ -185,6 +195,10 @@ export default function App() {
           {view === "research" ? (
             <main className="layout-research">
               <ResearchTree />
+            </main>
+          ) : view === "stock" ? (
+            <main className="layout-research">
+              <StockView />
             </main>
           ) : (
             <main className="layout" style={{ gridTemplateColumns: `${columns[0]}px 8px ${columns[1]}px 8px minmax(320px, 1fr)` }}>

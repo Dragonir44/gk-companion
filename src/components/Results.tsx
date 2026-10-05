@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { chosenRecipe, isProduction, plan, RAW, tree, type Plan, type TreeNode } from "../calc";
 import { useActiveList, useStore } from "../store";
 import type { CraftList } from "../types";
-import { fmtNum, Points, useGame } from "./ctx";
+import { fmtNum, ownedFor, Points, useGame } from "./ctx";
 import { Icon } from "./Icon";
 import { MixChoice, runeText } from "./MixChoice";
 import { LockBadge } from "./Search";
@@ -11,12 +11,15 @@ import { LockBadge } from "./Search";
 type Tab = "materials" | "crafting";
 
 export function Results() {
-  const { t, idx, available, knownMixes } = useGame();
+  const { t, idx, available, knownMixes, stock, obtainable, strict } = useGame();
   const list = useActiveList();
   const [tab, setTab] = useState<Tab>("materials");
   const p = useMemo(
-    () => (list ? plan(idx, list.entries, list.choices, { have: list.have, available, knownMixes }) : undefined),
-    [idx, list, available, knownMixes],
+    () =>
+      list
+        ? plan(idx, list.entries, list.choices, { have: ownedFor(stock, list.have), available, knownMixes, obtainable, strict })
+        : undefined,
+    [idx, list, available, knownMixes, stock, obtainable, strict],
   );
 
   if (!list || !p || !list.entries.length) return <section className="panel results-panel" />;
@@ -37,18 +40,33 @@ export function Results() {
 }
 
 function Materials({ p, list }: { p: Plan; list: CraftList }) {
-  const { t, n, idx } = useGame();
+  const { t, n, idx, hasSave, stock } = useGame();
   const setHave = useStore((s) => s.setHave);
+  const useStock = useStore((s) => s.useStock);
+  const setUseStock = useStore((s) => s.setUseStock);
   const sorted = (m: Map<string, number>) => [...m].sort((a, b) => n.name(a[0]).localeCompare(n.name(b[0])));
   const haveInput = (item: string) => (
     <label>
+      <StockTag item={item} />
       {t.owned}
-      <input type="number" min={0} value={list.have[item] ?? ""} onChange={(e) => setHave(item, Number(e.target.value))} />
+      <input
+        type="number"
+        min={0}
+        placeholder={stock.total[item] ? String(stock.total[item]) : undefined}
+        value={list.have[item] ?? ""}
+        onChange={(e) => setHave(item, Number(e.target.value))}
+      />
     </label>
   );
 
   return (
     <div className="tab-body">
+      {hasSave && (
+        <label className="toggle stock-toggle" title={t.useStockHint}>
+          <input type="checkbox" checked={useStock} onChange={(e) => setUseStock(e.target.checked)} />
+          {t.useStock}
+        </label>
+      )}
       <h3>{t.rawMaterials}</h3>
       {!p.raw.size && !p.groups.size ? (
         <p className="muted">{t.nothingToGather}</p>
@@ -136,7 +154,7 @@ function Materials({ p, list }: { p: Plan; list: CraftList }) {
 
 /** The crafting tree of each list entry, with choices inline. */
 function Crafting({ list }: { list: CraftList }) {
-  const { t, n, idx, available, knownMixes } = useGame();
+  const { t, n, idx, available, knownMixes, stock, obtainable, strict } = useGame();
   // Bumping the key remounts the tree with every node open or closed.
   const [expand, setExpand] = useState<{ open: boolean; key: number }>({ open: true, key: 0 });
   return (
@@ -162,7 +180,7 @@ function Crafting({ list }: { list: CraftList }) {
             </summary>
             <ul>
               {r.runes && <MixChoice recipe={r} />}
-              {tree(idx, r, e.count, list.choices, { have: list.have, available, knownMixes }).map((node, i) => (
+              {tree(idx, r, e.count, list.choices, { have: ownedFor(stock, list.have), available, knownMixes, obtainable, strict }).map((node, i) => (
                 <CraftNode key={i} node={node} list={list} open={expand.open} />
               ))}
             </ul>
@@ -174,9 +192,9 @@ function Crafting({ list }: { list: CraftList }) {
 }
 
 function CraftNode({ node, list, open }: { node: TreeNode; list: CraftList; open: boolean }) {
-  const { t, n, idx } = useGame();
+  const { t, n, idx, stock } = useGame();
   const setHave = useStore((s) => s.setHave);
-  const owned = list.have[node.item] ?? 0;
+  const owned = ownedFor(stock, list.have)[node.item] ?? 0;
   const row = (
     <>
       <span className="qty">{fmtNum(node.qty)}</span>
@@ -199,7 +217,7 @@ function CraftNode({ node, list, open }: { node: TreeNode; list: CraftList; open
             className="have-input"
             type="number"
             min={0}
-            placeholder={t.owned}
+            placeholder={stock.total[node.item] ? `📦${stock.total[node.item]}` : t.owned}
             title={t.owned}
             value={list.have[node.item] ?? ""}
             onChange={(e) => setHave(node.item, Number(e.target.value))}
@@ -258,5 +276,24 @@ function ItemChoice({ item, compact }: { item: string; compact?: boolean }) {
         </option>
       ))}
     </select>
+  );
+}
+
+/** 📦 quantity in the save's chests, with where in the tooltip. */
+export function StockTag({ item }: { item: string }) {
+  const { n, stock, idx } = useGame();
+  const total = stock.total[item];
+  if (!total) return null;
+  const zoneName = (z?: string) => {
+    const e = z ? idx.data.zones?.find((x) => x.id === z) : undefined;
+    return e ? n.text(e.name) : undefined;
+  };
+  const where = (stock.where.get(item) ?? [])
+    .map((w) => `${n.name(w.object)}${zoneName(w.zone) ? ` — ${zoneName(w.zone)}` : ""} : ${w.count}`)
+    .join("\n");
+  return (
+    <span className="stock-tag" title={where}>
+      📦 {fmtNum(total)}
+    </span>
   );
 }

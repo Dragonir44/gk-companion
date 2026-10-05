@@ -16,6 +16,10 @@ fn main() {
     for (k, v) in &p.lists {
         println!("{k}: {} {:?}", v.len(), &v[..v.len().min(3)]);
     }
+    for c in &p.inventories {
+        let total: u32 = c.items.values().sum();
+        println!("stock {:<28} {:<22} {} items, {} kinds", c.object, c.zone.as_deref().unwrap_or("-"), total, c.items.len());
+    }
     if let Some(out) = args.get(3) {
         let slot = save::list_slots(&[path.parent().unwrap().to_path_buf()]).into_iter().find(|s| s.path == path).unwrap();
         let json = serde_json::json!({ "slot": slot, "progress": p });

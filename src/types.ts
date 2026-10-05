@@ -1,7 +1,7 @@
 // Mirrors src-tauri/src/model.rs.
 
 export type GameId = "gk1" | "gk2";
-export type View = "planner" | "research";
+export type View = "planner" | "research" | "stock";
 export const GAMES: GameId[] = ["gk1", "gk2"];
 
 export interface Entity {
@@ -80,6 +80,7 @@ export interface GameData {
   recipes: Recipe[];
   techs: Tech[];
   branches: Branch[];
+  zones?: Entity[];
   locales: Record<string, Record<string, string>>;
   icons: IconIndex;
   /** Alchemy recipe id -> mixes that make it. */
@@ -144,6 +145,8 @@ export interface ListsFile {
     showSpoilers?: boolean;
     saveChoice?: Partial<Record<GameId, string>>;
     columns?: [number, number];
+    useStock?: boolean;
+    onlyAvailable?: boolean;
   };
 }
 
@@ -167,6 +170,16 @@ export interface Progress {
   modified: number;
   /** knowledgeSystem lists: unlockedTechs, revealedTechs, hiddenTechs, unlockedCrafts... */
   lists: Record<string, string[]>;
+  /** Stored items per container (gk2). */
+  inventories?: Container[];
+}
+
+export interface Container {
+  /** World object id (`chest_rough`), or `player`. */
+  object: string;
+  /** World zone id; named in GameData.zones. */
+  zone?: string;
+  items: Record<string, number>;
 }
 
 /** Which save to follow: a slot id, "none", or undefined for the latest. */

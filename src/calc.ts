@@ -62,6 +62,10 @@ export interface Context {
   available?: Available;
   /** Mix ids already made in game (from the save). */
   knownMixes?: Set<string>;
+  /** Whether the player can get an item now (in stock, or an unlocked craft). */
+  obtainable?: (item: string) => boolean;
+  /** Only use mixes whose ingredients are all obtainable (when any is). */
+  strict?: boolean;
 }
 
 /**
@@ -75,7 +79,12 @@ export function chosenMix(idx: Index, r: Recipe, choices: Record<string, string>
   const found = picked ? mixes.find((m) => m.id === picked) : undefined;
   if (found) return found;
   const have = ctx.have ?? {};
+  const obtainable = ctx.obtainable;
+  const unobtainable = (m: Mix) => (obtainable ? m.items.filter((i) => !obtainable(i)).length : 0);
+  const usable = ctx.strict && obtainable ? mixes.filter((m) => unobtainable(m) === 0) : [];
+  const candidates = usable.length ? usable : mixes;
   const score = (m: Mix) => [
+    unobtainable(m),
     m.items.filter((i) => !((have[i] ?? 0) > 0)).length,
     ctx.knownMixes?.has(m.id) ? 0 : 1,
     m.items.filter((i) => idx.producers.has(i)).length,
@@ -83,7 +92,7 @@ export function chosenMix(idx: Index, r: Recipe, choices: Record<string, string>
   ];
   let best: Mix | undefined;
   let bestScore: number[] = [];
-  for (const m of mixes) {
+  for (const m of candidates) {
     const s = score(m);
     if (!best || lexLess(s, bestScore)) {
       best = m;

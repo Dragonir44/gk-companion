@@ -13,7 +13,8 @@ const fold = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCa
 
 export function Search() {
   const { t, n, idx, u, hasSave } = useGame();
-  const [onlyUnlocked, setOnlyUnlocked] = useState(false);
+  const onlyUnlocked = useStore((s) => s.onlyAvailable);
+  const setOnlyUnlocked = useStore((s) => s.setOnlyAvailable);
   const showHidden = useStore((s) => s.showHidden);
   const setShowHidden = useStore((s) => s.setShowHidden);
   const addEntry = useStore((s) => s.addEntry);

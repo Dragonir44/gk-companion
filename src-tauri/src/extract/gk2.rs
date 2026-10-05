@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, HashMap};
 use serde_json::Value;
 
 use super::{entity, expr, item_entity, flag, list, num, referenced_objects, text, Names, Normalized};
-use crate::model::{Mix, Recipe, RecipeKind, ReputationLock, Stack, Tech};
+use crate::model::{Entity, Mix, Recipe, RecipeKind, ReputationLock, Stack, Tech};
 
 /// `BuildingDef.buildingMode` for removal entries (`*_r`), not constructions.
 const BUILDING_MODE_REMOVE: i64 = 2;
@@ -298,7 +298,21 @@ pub fn normalize(b: &Value, names: &mut Names) -> Normalized {
     }
     // Group ids appear as ingredients, so they get names like items.
     items.extend(groups.keys().map(|g| entity(names, g)));
-    let objects = referenced_objects(&recipes, names);
+    // Zone names are `wz_<zone>`; storage objects get names for stock lists.
+    let zones = list(b, "worldZoneDefs")
+        .iter()
+        .map(|z| {
+            let id = text(z, "id");
+            Entity { name: names.exact(&format!("wz_{id}")), ..entity(names, id) }
+        })
+        .collect();
+    let storage: Vec<String> = list(b, "wgoDefs")
+        .iter()
+        .map(|w| text(w, "id"))
+        .filter(|id| crate::save::inventory::is_storage(id))
+        .map(str::to_string)
+        .collect();
+    let objects = referenced_objects(&recipes, &storage, names);
 
     let object_icons = list(b, "wgoDefs")
         .iter()
@@ -313,5 +327,5 @@ pub fn normalize(b: &Value, names: &mut Names) -> Normalized {
         .map(|id| (id, TECH_TABS.get(id as usize).map(|n| format!("tech_tab_{n}")).unwrap_or_default()))
         .collect();
 
-    Normalized { items, objects, groups, recipes, techs, branches, object_icons, alchemy_mixes }
+    Normalized { items, objects, groups, recipes, techs, branches, object_icons, alchemy_mixes, zones, storage }
 }
