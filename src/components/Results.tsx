@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 
-import { chosenRecipe, isProduction, plan, RAW, tree, type Plan, type TreeNode } from "../calc";
+import { chosenRecipe, isProduction, plan, RAW, tree, yieldOf, type Plan, type TreeNode } from "../calc";
 import { useActiveList, useStore } from "../store";
 import type { CraftList } from "../types";
 import { fmtNum, ownedFor, Points, useGame } from "./ctx";
@@ -45,6 +45,8 @@ function Materials({ p, list }: { p: Plan; list: CraftList }) {
   const useStock = useStore((s) => s.useStock);
   const setUseStock = useStore((s) => s.setUseStock);
   const sorted = (m: Map<string, number>) => [...m].sort((a, b) => n.name(a[0]).localeCompare(n.name(b[0])));
+  // Intermediate crafts (not the list's own entries), in craft order.
+  const intermediates = p.steps.filter((s) => s.item !== undefined);
   const haveInput = (item: string) => (
     <label>
       <StockTag item={item} />
@@ -69,7 +71,7 @@ function Materials({ p, list }: { p: Plan; list: CraftList }) {
       )}
       <h3>{t.rawMaterials}</h3>
       {!p.raw.size && !p.groups.size ? (
-        <p className="muted">{t.nothingToGather}</p>
+        <p className="muted">{intermediates.length ? t.nothingToGatherButCraft : t.nothingToGather}</p>
       ) : (
         <table className="mats">
           <tbody>
@@ -101,6 +103,28 @@ function Materials({ p, list }: { p: Plan; list: CraftList }) {
             ))}
           </tbody>
         </table>
+      )}
+
+      {intermediates.length > 0 && (
+        <>
+          <h3>{t.toCraft}</h3>
+          <table className="mats">
+            <tbody>
+              {intermediates.map((s) => (
+                <tr key={s.item}>
+                  <td className="qty">{fmtNum(s.crafts * yieldOf(s.recipe, s.item!))}</td>
+                  <td>
+                    <span className="item">
+                      <Icon sprite={n.icon(s.item!)} size={24} />
+                      {n.name(s.item!)}
+                    </span>
+                  </td>
+                  <td className="muted small">{n.station(s.recipe)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
       )}
 
       {p.used.size > 0 && (
