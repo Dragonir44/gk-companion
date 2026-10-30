@@ -112,3 +112,10 @@ export function upgrade(
   const full = squads.map((s, k) => powers[k] + Math.max(0, s.size - s.fighters.length) * perNew);
   return { fighters, needs, powers, full, free };
 }
+
+/** How far a battle is: ready now, once geared, once squads are full, or out of reach. */
+export type Readiness = "ready" | "gear" | "full" | "short";
+
+export function readiness(need: number, now: number, geared: number, full: number): Readiness {
+  return now >= need ? "ready" : geared >= need ? "gear" : full >= need ? "full" : "short";
+}

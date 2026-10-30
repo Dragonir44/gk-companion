@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bestGear, fightPower, fighterPower, squadsOf, upgrade } from "./army";
+import { bestGear, fightPower, fighterPower, readiness, squadsOf, upgrade } from "./army";
 import type { Entity, GameData, Zombie } from "./types";
 
 const weapon = (id: string, power: number, damage: number, pause: number): Entity => ({ id, gear: { power, damage, pause } });
@@ -67,5 +67,14 @@ describe("army", () => {
       { item: "bow_3", count: 2, make: 2 },
     ]);
     expect([up.free, up.powers[0], up.full[0]]).toEqual([2, 7, 21]);
+  });
+
+  it("tells how far a battle is", () => {
+    expect([readiness(56, 76, 92, 148), readiness(80, 76, 92, 148), readiness(100, 76, 92, 148), readiness(150, 76, 92, 148)]).toEqual([
+      "ready",
+      "gear",
+      "full",
+      "short",
+    ]);
   });
 });
