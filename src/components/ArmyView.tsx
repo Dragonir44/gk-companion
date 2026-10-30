@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 
-import { bestGear, defencePower, fightPower, readiness, squadsOf, upgrade, type Readiness, type Squad, type Upgrade } from "../army";
+import { bestGear, defencePower, fightPower, isWon, readiness, squadsOf, upgrade, type Readiness, type Squad, type Upgrade } from "../army";
 import { fmt, type Strings } from "../i18n";
 import { useStore } from "../store";
 import type { Fight } from "../types";
@@ -31,6 +31,9 @@ export function ArmyView() {
   const now = fightPower(data, built, squads.map((s) => s.power), all);
   const geared = fightPower(data, built, up.powers, all);
   const full = fightPower(data, built, up.full, all);
+  const finished = new Set(progress.lists.finishedQuests ?? []);
+  const known = data.army.fights.filter((f) => isWon(f, finished) !== undefined);
+  const wonCount = known.filter((f) => isWon(f, finished)).length;
   // Rounds of one battle share its name (the arena): number them.
   const fightName = (f: Fight) => {
     const name = n.text(f.name) ?? f.id;
@@ -44,6 +47,7 @@ export function ArmyView() {
         <Kpi label={t.armyNowPower} value={now} sub={fmt(t.armyNowSplit, { d: defences, s: now - defences })} />
         <Kpi label={t.armyBest} value={geared} delta={geared - now} />
         {up.free > 0 && <Kpi label={t.armyFull} value={full} delta={full - now} sub={fmt(t.armyFreePlaces, { n: up.free })} />}
+        <Kpi label={t.armyWonCount} value={wonCount} sub={fmt(t.armyOutOf, { n: known.length })} />
       </div>
       <p className="muted small">{t.armyRule}</p>
 
@@ -77,9 +81,10 @@ export function ArmyView() {
           {data.army.fights.map((f) => {
             const p = [squads.map((s) => s.power), up.powers, up.full].map((powers) => fightPower(data, built, powers, f));
             const r = readiness(f.power, p[0], p[1], p[2]);
+            const won = isWon(f, finished);
             const rules = [f.noTowers && t.armyNoTowers, f.noBarricades && t.armyNoBarricades].filter(Boolean).join(", ");
             return (
-              <tr key={f.id}>
+              <tr key={f.id} className={won ? "won" : ""}>
                 <td>
                   {fightName(f)}
                   <span className="muted small">
@@ -91,9 +96,21 @@ export function ArmyView() {
                 <td className="qty">{f.power}</td>
                 <td className="qty">{p[0]}</td>
                 <td>
-                  <span className={`ready ready-${r}`}>
-                    <span aria-hidden>{READY_ICON[r]}</span> {r === "short" ? fmt(t.armyShortBy, { n: f.power - p[2] }) : readyText(t, r)}
-                  </span>
+                  {won ? (
+                    <span className="ready ready-won">
+                      <span aria-hidden>★</span> {t.armyWon}
+                    </span>
+                  ) : (
+                    <span className={`ready ready-${r}`}>
+                      <span aria-hidden>{READY_ICON[r]}</span> {r === "short" ? fmt(t.armyShortBy, { n: f.power - p[2] }) : readyText(t, r)}
+                    </span>
+                  )}
+                  {won === undefined && (
+                    <span className="muted small" title={t.armyWonUnknown}>
+                      {" "}
+                      ?
+                    </span>
+                  )}
                 </td>
               </tr>
             );

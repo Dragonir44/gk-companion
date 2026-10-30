@@ -113,6 +113,12 @@ export function upgrade(
   return { fighters, needs, powers, full, free };
 }
 
+/** Won (by the save's finished quests); undefined when the game doesn't tell. */
+export function isWon(fight: Fight, finished: Set<string>): boolean | undefined {
+  if (!fight.wonBy?.length) return undefined;
+  return fight.wonBy.some((q) => finished.has(q));
+}
+
 /** How far a battle is: ready now, once geared, once squads are full, or out of reach. */
 export type Readiness = "ready" | "gear" | "full" | "short";
 

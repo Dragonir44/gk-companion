@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bestGear, fightPower, fighterPower, readiness, squadsOf, upgrade } from "./army";
+import { bestGear, fightPower, fighterPower, isWon, readiness, squadsOf, upgrade } from "./army";
 import type { Entity, GameData, Zombie } from "./types";
 
 const weapon = (id: string, power: number, damage: number, pause: number): Entity => ({ id, gear: { power, damage, pause } });
@@ -76,5 +76,12 @@ describe("army", () => {
       "full",
       "short",
     ]);
+  });
+
+  it("knows a battle is won from the quests its victory finishes", () => {
+    const fight = { id: "fight_B2_1", power: 80, squads: 3, wonBy: ["120_pre_B2_fights_win", "120_pre_B2_2_fights_win"] };
+    expect(isWon(fight, new Set(["120_pre_B2_2_fights_win"]))).toBe(true);
+    expect(isWon(fight, new Set())).toBe(false);
+    expect(isWon({ id: "sewer_fight_1", power: 6, squads: 1 }, new Set())).toBeUndefined();
   });
 });

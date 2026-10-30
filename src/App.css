@@ -1535,6 +1535,13 @@ li.craft-row.leaf {
 .ready-short {
   color: var(--danger);
 }
+.ready-won {
+  color: var(--muted);
+}
+.fights tr.won td:first-child,
+.fights tr.won .qty {
+  color: var(--muted);
+}
 .army-split {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 320px;

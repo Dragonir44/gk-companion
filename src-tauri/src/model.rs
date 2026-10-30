@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 /// Bump when the model changes, so stale caches are re-extracted.
-pub const MODEL_VERSION: u32 = 17;
+pub const MODEL_VERSION: u32 = 18;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -95,6 +95,10 @@ pub struct Fight {
     pub no_towers: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub no_barricades: bool,
+    /// Quests finished by winning it, or the battle it chains into: won
+    /// once one of them is finished in the save.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub won_by: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

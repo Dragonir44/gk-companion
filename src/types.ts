@@ -48,6 +48,8 @@ export interface Fight {
   squads: number;
   noTowers?: boolean;
   noBarricades?: boolean;
+  /** Quests its victory finishes: won once one is finished in the save. */
+  wonBy?: string[];
 }
 
 export interface Defence {

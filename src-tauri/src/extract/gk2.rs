@@ -289,9 +289,36 @@ fn leading_number(d: &Value) -> Option<f64> {
     s[..end].parse().ok()
 }
 
+/// `QuestCheck.triggerType` of "this battle was won".
+const TRIGGER_FIGHT_WON: i64 = 39;
+
 /// Battles (named, with a power to reach) and the military base's defences:
 /// the objects built from a `<id>_fb` building, worth their quality.
 fn army(b: &Value, names: &mut Names) -> Option<Army> {
+    // Fight id -> quests its victory finishes.
+    let mut wins: HashMap<&str, Vec<String>> = HashMap::new();
+    for q in list(b, "questDefs") {
+        let Some(check) = q.get("finishCheck") else { continue };
+        if check.get("triggerType").and_then(Value::as_i64) == Some(TRIGGER_FIGHT_WON) {
+            wins.entry(text(check, "triggerId")).or_default().push(text(q, "id").to_string());
+        }
+    }
+    let next: HashMap<&str, &str> =
+        list(b, "fightDefinitions").iter().map(|f| (text(f, "id"), text(f, "onWinNextFightId"))).collect();
+    // A battle that chains into another is won with it (its follow-up
+    // finishes the quest).
+    let won_by = |id: &str| {
+        let mut quests = Vec::new();
+        let mut cur = id;
+        for _ in 0..next.len() {
+            quests.extend(wins.get(cur).into_iter().flatten().cloned());
+            match next.get(cur) {
+                Some(n) if !n.is_empty() => cur = n,
+                _ => break,
+            }
+        }
+        quests
+    };
     let fights: Vec<Fight> = list(b, "fightDefinitions")
         .iter()
         .filter(|f| num(f, "defencePowerLock") > 0.0)
@@ -304,6 +331,7 @@ fn army(b: &Value, names: &mut Names) -> Option<Army> {
                 squads: num(f, "squads") as u32,
                 no_towers: flag(f, "isTowersUnavailable"),
                 no_barricades: flag(f, "isBarricadesUnavailable"),
+                won_by: won_by(id),
             })
         })
         .collect();

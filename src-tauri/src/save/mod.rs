@@ -153,7 +153,15 @@ pub fn read_progress(game: GameId, slot: &SaveSlot) -> Result<Progress, SaveErro
     };
     let (inventories, objects) = world.map(|w| (w.containers, w.objects)).unwrap_or_default();
     let army = if game == GameId::Gk2 { Some(zombies::army(&bytes)?) } else { None };
-    let (zombies, defences, squads) = army.map(|a| (a.zombies, a.defences, a.squads)).unwrap_or_default();
+    let mut lists = lists;
+    let (zombies, defences, squads) = match army {
+        Some(a) => {
+            // Battles won are told by the quests their victory finishes.
+            lists.insert("finishedQuests".into(), a.finished_quests);
+            (a.zombies, a.defences, a.squads)
+        }
+        None => Default::default(),
+    };
     Ok(Progress { slot: slot.id.clone(), modified: slot.modified, lists, inventories, objects, zombies, defences, squads })
 }
 
