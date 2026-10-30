@@ -74,6 +74,8 @@ pub struct Progress {
     pub zombies: Vec<zombies::Zombie>,
     /// Defences built at the military base: object ids (gk2).
     pub defences: Vec<String>,
+    /// The barracks' squad slots (gk2).
+    pub squads: Vec<zombies::SquadSlot>,
 }
 
 pub fn supported(game: GameId) -> bool {
@@ -151,8 +153,8 @@ pub fn read_progress(game: GameId, slot: &SaveSlot) -> Result<Progress, SaveErro
     };
     let (inventories, objects) = world.map(|w| (w.containers, w.objects)).unwrap_or_default();
     let army = if game == GameId::Gk2 { Some(zombies::army(&bytes)?) } else { None };
-    let (zombies, defences) = army.map(|a| (a.zombies, a.defences)).unwrap_or_default();
-    Ok(Progress { slot: slot.id.clone(), modified: slot.modified, lists, inventories, objects, zombies, defences })
+    let (zombies, defences, squads) = army.map(|a| (a.zombies, a.defences, a.squads)).unwrap_or_default();
+    Ok(Progress { slot: slot.id.clone(), modified: slot.modified, lists, inventories, objects, zombies, defences, squads })
 }
 
 /// String lists directly under `knowledgeSystem/<field>`.

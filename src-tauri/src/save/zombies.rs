@@ -63,6 +63,8 @@ const NO_GUID: &str = "00000000-0000-0000-0000-000000000000";
 struct Wgo {
     depth: usize,
     id: String,
+    /// Dock points (places for zombies).
+    docks: u32,
     guid: Option<String>,
     zone: Option<String>,
     name: Option<String>,
@@ -87,6 +89,20 @@ struct Wgo {
 pub struct Army {
     pub zombies: Vec<Zombie>,
     pub defences: Vec<String>,
+    pub squads: Vec<SquadSlot>,
+}
+
+/// The barracks' world object: each instance is a squad slot.
+const BARRACKS: &str = "fighter_container";
+
+/// A squad slot of the barracks, empty or not.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SquadSlot {
+    /// Its `uniqueId` (`Zombie::place` of its fighters).
+    pub place: String,
+    /// Fighters it takes.
+    pub size: u32,
 }
 
 pub fn army(bytes: &[u8]) -> Result<Army, SaveError> {
@@ -99,6 +115,7 @@ pub fn army(bytes: &[u8]) -> Result<Army, SaveError> {
     // Body `uniqueId` -> uniqueId of the place holding it.
     let mut held: HashMap<String, String> = HashMap::new();
     let mut base: Vec<String> = Vec::new();
+    let mut squads: Vec<SquadSlot> = Vec::new();
     // SGuid node id -> guid, and the SGuid node being read (depth, id).
     let mut guids: HashMap<i32, String> = HashMap::new();
     let mut guid_node: Option<(usize, i32)> = None;
@@ -128,6 +145,11 @@ pub fn army(bytes: &[u8]) -> Result<Army, SaveError> {
                 let n = stack.len();
                 if name.is_none() && n >= 2 && stack[n - 1] == ARRAY && stack[n - 2] == "wgoDataList" {
                     wgo = Some(Wgo { depth: n, ..Default::default() });
+                }
+                if let Some(w) = &mut wgo {
+                    if name.is_none() && rel == ["mainWgoPartData", "dockPointDataList", ARRAY] {
+                        w.docks += 1;
+                    }
                 }
                 if ty.is_some_and(|t| t.starts_with("SGuid")) {
                     guid_node = r.node_id.map(|id| (n + 1, id));
@@ -202,6 +224,9 @@ pub fn army(bytes: &[u8]) -> Result<Army, SaveError> {
                             held.insert(body.clone(), g.clone());
                         }
                     }
+                    if w.id == BARRACKS {
+                        squads.extend(w.guid.clone().map(|place| SquadSlot { place, size: w.docks }));
+                    }
                     if w.zombie {
                         found.push(w);
                     }
@@ -235,7 +260,7 @@ pub fn army(bytes: &[u8]) -> Result<Army, SaveError> {
         })
         .collect();
     let defences = base.iter().filter_map(|g| objects.get(g).cloned()).collect();
-    Ok(Army { zombies, defences })
+    Ok(Army { zombies, defences, squads })
 }
 
 #[cfg(test)]
@@ -256,7 +281,7 @@ mod tests {
     }
 
     #[test]
-    fn resolves_guid_references() {
+    fn resolves_guid_references_and_reads_squad_slots() {
         let mut b = Vec::new();
         start(&mut b, None);
         start(&mut b, Some("wgoDataList"));
@@ -265,6 +290,18 @@ mod tests {
         str_field(&mut b, "id", "tower_2_pre");
         guid_node(&mut b, "uniqueId", 7, "t-1");
         b.push(0x05);
+        // An empty barracks slot with two places.
+        start(&mut b, None);
+        str_field(&mut b, "id", "fighter_container");
+        guid_node(&mut b, "uniqueId", 8, "f-1");
+        start(&mut b, Some("mainWgoPartData"));
+        start(&mut b, Some("dockPointDataList"));
+        arr(&mut b);
+        for _ in 0..2 {
+            start(&mut b, None);
+            b.push(0x05);
+        }
+        b.extend([0x07, 0x05, 0x05, 0x05]);
         b.extend([0x07, 0x05]);
         // The base lists it by reference to node 7 (unnamed internal ref, 0x0A).
         start(&mut b, Some("militaryBaseData"));
@@ -273,7 +310,9 @@ mod tests {
         b.push(0x0A);
         b.extend(7i32.to_le_bytes());
         b.extend([0x07, 0x05, 0x05, 0x05]);
-        assert_eq!(army(&b).unwrap().defences, vec!["tower_2_pre".to_string()]);
+        let a = army(&b).unwrap();
+        assert_eq!(a.defences, vec!["tower_2_pre".to_string()]);
+        assert_eq!(a.squads, vec![SquadSlot { place: "f-1".into(), size: 2 }]);
     }
 
     fn guid(b: &mut Vec<u8>, name: &str, id: &str) {

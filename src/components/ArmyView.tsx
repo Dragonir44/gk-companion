@@ -18,16 +18,16 @@ export function ArmyView() {
   const lists = allLists.filter((l) => l.game === game);
   const [target, setTarget] = useState("");
   const [done, setDone] = useState<string>();
+  const [fill, setFill] = useState(false);
 
   const items = useMemo(() => new Map(data.items.map((e) => [e.id, e])), [data]);
-  const squads = useMemo(() => squadsOf(data, progress?.zombies ?? []), [data, progress]);
+  const squads = useMemo(() => squadsOf(data, progress?.zombies ?? [], progress?.squads), [data, progress]);
   const best = useMemo(() => bestGear(data, obtainable), [data, obtainable]);
-  const up = useMemo(() => upgrade(data, squads, best, stock.total), [data, squads, best, stock]);
+  const up = useMemo(() => upgrade(data, squads, best, stock.total, fill), [data, squads, best, stock, fill]);
   const built = progress?.defences ?? [];
 
   if (!progress?.zombies || !data.army) return <section className="panel stock-view muted center-text">{t.armyNone}</section>;
 
-  const bestPowers = squads.map((s) => s.fighters.reduce((p, z) => p + (up.fighters.get(z)?.power ?? 0), 0));
   const defenceCounts = new Map<string, number>();
   for (const id of built) defenceCounts.set(id, (defenceCounts.get(id) ?? 0) + 1);
   const defencePower = (id: string) => data.army?.defences.find((d) => d.object === id)?.power ?? 0;
@@ -65,9 +65,11 @@ export function ArmyView() {
       {squads.map((s, k) => (
         <div key={s.place} className="squad">
           <h4>
-            {fmt(t.armySquad, { n: k + 1 })} · {t.armyPower} {s.power}
-            {bestPowers[k] > s.power && <span className="note"> → {bestPowers[k]}</span>}
+            {fmt(t.armySquad, { n: k + 1 })} · {fmt(t.armyPlaces, { n: s.fighters.length, size: s.size })} · {t.armyPower} {s.power}
+            {up.powers[k] > s.power && <span className="note"> → {up.powers[k]}</span>}
+            {up.full[k] > up.powers[k] && <span className="muted"> ({fmt(t.armyIfFull, { n: up.full[k] })})</span>}
           </h4>
+          {s.fighters.length === 0 && <p className="muted small">{t.armyEmpty}</p>}
           <table className="mats">
             <tbody>
               {s.fighters.map((z, i) => {
@@ -102,6 +104,12 @@ export function ArmyView() {
       {squads.length > 0 && (
         <>
           <h3>{t.armyNeeds}</h3>
+          {up.free > 0 && (
+            <label className="toggle">
+              <input type="checkbox" checked={fill} onChange={(e) => setFill(e.target.checked)} />
+              {fmt(t.armyFill, { n: up.free })}
+            </label>
+          )}
           {up.needs.length === 0 ? (
             <p className="muted">{t.armyAllGood}</p>
           ) : (
@@ -164,12 +172,14 @@ export function ArmyView() {
             <th>{t.armyRequired}</th>
             <th>{t.armyNow}</th>
             <th>{t.armyBest}</th>
+            {up.free > 0 && <th>{t.armyFull}</th>}
           </tr>
         </thead>
         <tbody>
           {data.army.fights.map((f) => {
             const now = fightPower(data, built, squads.map((s) => s.power), f);
-            const after = fightPower(data, built, bestPowers, f);
+            const after = fightPower(data, built, up.powers, f);
+            const full = fightPower(data, built, up.full, f);
             const rules = [f.noTowers && t.armyNoTowers, f.noBarricades && t.armyNoBarricades].filter(Boolean).join(", ");
             return (
               <tr key={f.id}>
@@ -184,6 +194,7 @@ export function ArmyView() {
                 <td className="qty">{f.power}</td>
                 <td className={`qty ${now >= f.power ? "ok" : "short"}`}>{now}</td>
                 <td className={`qty ${after >= f.power ? "ok" : "short"}`}>{after}</td>
+                {up.free > 0 && <td className={`qty ${full >= f.power ? "ok" : "short"}`}>{full}</td>}
               </tr>
             );
           })}

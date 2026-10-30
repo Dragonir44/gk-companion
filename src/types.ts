@@ -293,6 +293,8 @@ export interface Progress {
   zombies?: Zombie[];
   /** Defences built at the military base: object ids (gk2). */
   defences?: string[];
+  /** The barracks' squad slots: id (`Zombie.place`) and fighters it takes. */
+  squads?: { place: string; size: number }[];
 }
 
 export interface Zombie {

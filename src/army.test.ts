@@ -30,6 +30,12 @@ describe("army", () => {
       ["a", 2, 10],
       ["b", 1, 0],
     ]);
+    // Empty slots come last.
+    const all = squadsOf(data, [z("a", "bow_2", "armor_3")], [{ place: "e", size: 4 }, { place: "a", size: 4 }]);
+    expect(all.map((s) => [s.place, s.size, s.fighters.length])).toEqual([
+      ["a", 4, 1],
+      ["e", 4, 0],
+    ]);
   });
 
   it("counts defences the battle allows and its best squads", () => {
@@ -49,5 +55,17 @@ describe("army", () => {
       { item: "armor_3", count: 1, make: 1 },
     ]);
     expect([...up.fighters.values()].map((f) => f.power)).toEqual([6, 6]);
+  });
+
+  it("gears new fighters for free places when asked", () => {
+    const squads = squadsOf(data, [z("a", "bow_3", "armor_3")], [{ place: "a", size: 3 }]);
+    const best = bestGear(data);
+    const up = upgrade(data, squads, best, {}, true);
+    // armor_3 -> armor_4 for the fighter, and two new fighters fully geared.
+    expect(up.needs).toEqual([
+      { item: "armor_4", count: 3, make: 3 },
+      { item: "bow_3", count: 2, make: 2 },
+    ]);
+    expect([up.free, up.powers[0], up.full[0]]).toEqual([2, 7, 21]);
   });
 });

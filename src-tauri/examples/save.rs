@@ -25,6 +25,7 @@ fn main() {
             z.name, z.object, z.station.as_deref().unwrap_or("-"), z.tool, z.collar, z.weapon, z.armor, z.studied.len(), z.points);
     }
     println!("defences: {:?}", p.defences);
+    println!("squads: {:?}", p.squads);
     if let Some(out) = args.get(3) {
         let slot = save::list_slots(&[path.parent().unwrap().to_path_buf()]).into_iter().find(|s| s.path == path).unwrap();
         let json = serde_json::json!({ "slot": slot, "progress": p });

@@ -12,6 +12,8 @@ export const BARRACKS = "fighter_container";
 
 export interface Squad {
   place: string;
+  /** Fighters it takes. */
+  size: number;
   fighters: Zombie[];
   power: number;
 }
@@ -22,11 +24,20 @@ export function fighterPower(items: Map<string, Entity>, z: Pick<Zombie, "weapon
   return w && !w.armor && a?.armor ? w.power + a.power : 0;
 }
 
-export function squadsOf(data: GameData, zombies: Zombie[]): Squad[] {
+/** Every squad slot, empty ones included (after the others). */
+export function squadsOf(data: GameData, zombies: Zombie[], slots: { place: string; size: number }[] = []): Squad[] {
   const items = new Map(data.items.map((e) => [e.id, e]));
-  const by = new Map<string, Zombie[]>();
+  const by = new Map<string, Zombie[]>(slots.map((s) => [s.place, []]));
   for (const z of zombies) if (z.station === BARRACKS && z.place) by.set(z.place, [...(by.get(z.place) ?? []), z]);
-  return [...by].map(([place, fighters]) => ({ place, fighters, power: fighters.reduce((n, z) => n + fighterPower(items, z), 0) }));
+  const size = new Map(slots.map((s) => [s.place, s.size]));
+  return [...by]
+    .map(([place, fighters]) => ({
+      place,
+      size: Math.max(size.get(place) ?? 0, fighters.length),
+      fighters,
+      power: fighters.reduce((n, z) => n + fighterPower(items, z), 0),
+    }))
+    .sort((a, b) => Number(b.fighters.length > 0) - Number(a.fighters.length > 0));
 }
 
 /** Defences that count for a battle. */
@@ -63,10 +74,24 @@ export interface Upgrade {
   fighters: Map<Zombie, { weapon?: string; armor?: string; power: number }>;
   /** Items to hand out, and how many of them to make beyond the stock. */
   needs: { item: string; count: number; make: number }[];
+  /** Per squad, its power once upgraded, and once also full. */
+  powers: number[];
+  full: number[];
+  /** Free places in the squads. */
+  free: number;
 }
 
-/** Gives every fighter the best gear when better than what it wears. */
-export function upgrade(data: GameData, squads: Squad[], best: { weapon?: Entity; armor?: Entity }, stock: Record<string, number> = {}): Upgrade {
+/**
+ * Gives every fighter the best gear when better than what it wears; with
+ * `fill`, also gears new fighters for the free places.
+ */
+export function upgrade(
+  data: GameData,
+  squads: Squad[],
+  best: { weapon?: Entity; armor?: Entity },
+  stock: Record<string, number> = {},
+  fill = false,
+): Upgrade {
   const items = new Map(data.items.map((e) => [e.id, e]));
   const fighters: Upgrade["fighters"] = new Map();
   const counts = new Map<string, number>();
@@ -78,6 +103,12 @@ export function upgrade(data: GameData, squads: Squad[], best: { weapon?: Entity
     for (const id of [weapon, armor]) if (id) counts.set(id, (counts.get(id) ?? 0) + 1);
     fighters.set(z, { weapon, armor, power: fighterPower(items, { weapon: weapon ?? z.weapon, armor: armor ?? z.armor }) });
   }
+  const free = squads.reduce((n, s) => n + Math.max(0, s.size - s.fighters.length), 0);
+  if (fill && free)
+    for (const b of [best.weapon, best.armor]) if (b) counts.set(b.id, (counts.get(b.id) ?? 0) + free);
   const needs = [...counts].map(([item, count]) => ({ item, count, make: Math.max(0, count - (stock[item] ?? 0)) }));
-  return { fighters, needs };
+  const perNew = best.weapon && best.armor ? best.weapon.gear!.power + best.armor.gear!.power : 0;
+  const powers = squads.map((s) => s.fighters.reduce((n, z) => n + (fighters.get(z)?.power ?? 0), 0));
+  const full = squads.map((s, k) => powers[k] + Math.max(0, s.size - s.fighters.length) * perNew);
+  return { fighters, needs, powers, full, free };
 }
