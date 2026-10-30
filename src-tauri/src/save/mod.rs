@@ -156,8 +156,9 @@ pub fn read_progress(game: GameId, slot: &SaveSlot) -> Result<Progress, SaveErro
     let mut lists = lists;
     let (zombies, defences, squads) = match army {
         Some(a) => {
-            // Battles won are told by the quests their victory finishes.
+            // Battles won and offered are told by the quests their victory finishes.
             lists.insert("finishedQuests".into(), a.finished_quests);
+            lists.insert("activeQuests".into(), a.active_quests);
             (a.zombies, a.defences, a.squads)
         }
         None => Default::default(),

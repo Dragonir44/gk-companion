@@ -15,7 +15,8 @@
 //! barricades) by `uniqueId`.
 //!
 //! `questSystemData/questCollection/quests` gives each quest's status:
-//! battles are won by finishing quests (`QUEST_FINISHED`).
+//! battles are won by finishing quests (`QUEST_FINISHED`), offered while
+//! those quests are active.
 //!
 //! A `uniqueId` (an `SGuid` node) is written once; later mentions are
 //! references to that node, resolved here to the guid.
@@ -93,11 +94,13 @@ pub struct Army {
     pub zombies: Vec<Zombie>,
     pub defences: Vec<String>,
     pub squads: Vec<SquadSlot>,
-    /// Ids of the finished quests.
+    /// Ids of the finished quests, and of the active ones.
     pub finished_quests: Vec<String>,
+    pub active_quests: Vec<String>,
 }
 
-/// `QuestData.status` of finished quests (0: not started, 2: active).
+/// `QuestData.status` of active and finished quests (0: not started).
+const QUEST_ACTIVE: i64 = 2;
 const QUEST_FINISHED: i64 = 3;
 
 /// The barracks' world object: each instance is a squad slot.
@@ -125,6 +128,7 @@ pub fn army(bytes: &[u8]) -> Result<Army, SaveError> {
     let mut base: Vec<String> = Vec::new();
     let mut squads: Vec<SquadSlot> = Vec::new();
     let mut finished_quests: Vec<String> = Vec::new();
+    let mut active_quests: Vec<String> = Vec::new();
     let mut quest: Option<String> = None;
     const QUEST: [&str; 5] = ["questSystemData", "questCollection", "quests", ARRAY, ""];
     let in_quest = |stack: &[String]| stack.len() >= 5 && stack[stack.len() - 5..] == QUEST.map(String::from);
@@ -210,8 +214,10 @@ pub fn army(bytes: &[u8]) -> Result<Army, SaveError> {
             }
             Entry::Int(Some(field), v) => {
                 if field == "status" && in_quest(&stack) {
-                    if let Some(id) = quest.take().filter(|_| v == QUEST_FINISHED) {
-                        finished_quests.push(id);
+                    match (quest.take(), v) {
+                        (Some(id), QUEST_FINISHED) => finished_quests.push(id),
+                        (Some(id), QUEST_ACTIVE) => active_quests.push(id),
+                        _ => {}
                     }
                 }
                 if let (Some(w), []) = (&mut wgo, rel.as_slice()) {
@@ -280,7 +286,7 @@ pub fn army(bytes: &[u8]) -> Result<Army, SaveError> {
         })
         .collect();
     let defences = base.iter().filter_map(|g| objects.get(g).cloned()).collect();
-    Ok(Army { zombies, defences, squads, finished_quests })
+    Ok(Army { zombies, defences, squads, finished_quests, active_quests })
 }
 
 #[cfg(test)]
@@ -344,6 +350,7 @@ mod tests {
         b.extend([0x07, 0x05, 0x05, 0x05]);
         let a = army(&b).unwrap();
         assert_eq!(a.finished_quests, vec!["48_pre_A3_fights_win".to_string()]);
+        assert_eq!(a.active_quests, vec!["59_town_sewrena_AR4".to_string()]);
         assert_eq!(a.defences, vec!["tower_2_pre".to_string()]);
         assert_eq!(a.squads, vec![SquadSlot { place: "f-1".into(), size: 2 }]);
     }

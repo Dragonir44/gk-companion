@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bestGear, fightPower, fighterPower, isWon, readiness, squadsOf, upgrade } from "./army";
+import { bestGear, fightPower, fighterPower, isLocked, isWon, readiness, squadsOf, upgrade } from "./army";
 import type { Entity, GameData, Zombie } from "./types";
 
 const weapon = (id: string, power: number, damage: number, pause: number): Entity => ({ id, gear: { power, damage, pause } });
@@ -83,5 +83,11 @@ describe("army", () => {
     expect(isWon(fight, new Set(["120_pre_B2_2_fights_win"]))).toBe(true);
     expect(isWon(fight, new Set())).toBe(false);
     expect(isWon({ id: "sewer_fight_1", power: 6, squads: 1 }, new Set())).toBeUndefined();
+  });
+
+  it("knows a battle the story hasn't offered yet", () => {
+    const fight = { id: "fight_AR5_1", power: 88, squads: 3, wonBy: ["59_town_sewrena_AR5"] };
+    expect(isLocked(fight, new Set(), new Set())).toBe(true);
+    expect(isLocked(fight, new Set(), new Set(["59_town_sewrena_AR5"]))).toBe(false);
   });
 });

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 
-import { bestGear, defencePower, fightPower, isWon, readiness, squadsOf, upgrade, type Readiness, type Squad, type Upgrade } from "../army";
+import { bestGear, defencePower, fightPower, isLocked, isWon, readiness, squadsOf, upgrade, type Readiness, type Squad, type Upgrade } from "../army";
 import { fmt, type Strings } from "../i18n";
 import { useStore } from "../store";
 import type { Fight } from "../types";
@@ -32,6 +32,7 @@ export function ArmyView() {
   const geared = fightPower(data, built, up.powers, all);
   const full = fightPower(data, built, up.full, all);
   const finished = new Set(progress.lists.finishedQuests ?? []);
+  const active = new Set(progress.lists.activeQuests ?? []);
   const known = data.army.fights.filter((f) => isWon(f, finished) !== undefined);
   const wonCount = known.filter((f) => isWon(f, finished)).length;
   // Rounds of one battle share its name (the arena): number them.
@@ -82,6 +83,7 @@ export function ArmyView() {
             const p = [squads.map((s) => s.power), up.powers, up.full].map((powers) => fightPower(data, built, powers, f));
             const r = readiness(f.power, p[0], p[1], p[2]);
             const won = isWon(f, finished);
+            const locked = isLocked(f, finished, active);
             const rules = [f.noTowers && t.armyNoTowers, f.noBarricades && t.armyNoBarricades].filter(Boolean).join(", ");
             return (
               <tr key={f.id} className={won ? "won" : ""}>
@@ -99,6 +101,11 @@ export function ArmyView() {
                   {won ? (
                     <span className="ready ready-won">
                       <span aria-hidden>★</span> {t.armyWon}
+                    </span>
+                  ) : locked ? (
+                    <span className="ready ready-won" title={t.armyLockedHint}>
+                      <span aria-hidden>🔒</span> {t.armyLocked}
+                      {r !== "short" && ` · ${readyText(t, r).toLowerCase()}`}
                     </span>
                   ) : (
                     <span className={`ready ready-${r}`}>
