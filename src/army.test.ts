@@ -89,5 +89,10 @@ describe("army", () => {
     const fight = { id: "fight_AR5_1", power: 88, squads: 3, wonBy: ["59_town_sewrena_AR5"] };
     expect(isLocked(fight, new Set(), new Set())).toBe(true);
     expect(isLocked(fight, new Set(), new Set(["59_town_sewrena_AR5"]))).toBe(false);
+    // The arena's last round: no victory quest, offered by the quest that spawns it.
+    const last = { id: "fight_AR10_1", power: 116, squads: 4, offeredBy: ["59_town_sewrena_AR10"], repeatable: true };
+    expect(isWon(last, new Set())).toBeUndefined();
+    expect(isLocked(last, new Set(), new Set())).toBe(true);
+    expect(isLocked(last, new Set(), new Set(["59_town_sewrena_AR10"]))).toBe(false);
   });
 });

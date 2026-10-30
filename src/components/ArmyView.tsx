@@ -107,12 +107,16 @@ export function ArmyView() {
                       <span aria-hidden>🔒</span> {t.armyLocked}
                       {r !== "short" && ` · ${readyText(t, r).toLowerCase()}`}
                     </span>
+                  ) : f.repeatable ? (
+                    <span className={`ready ready-${r}`} title={t.armyRepeatableHint}>
+                      <span aria-hidden>↻</span> {t.armyRepeatable} · {r === "short" ? fmt(t.armyShortBy, { n: f.power - p[2] }) : readyText(t, r).toLowerCase()}
+                    </span>
                   ) : (
                     <span className={`ready ready-${r}`}>
                       <span aria-hidden>{READY_ICON[r]}</span> {r === "short" ? fmt(t.armyShortBy, { n: f.power - p[2] }) : readyText(t, r)}
                     </span>
                   )}
-                  {won === undefined && (
+                  {won === undefined && !f.repeatable && (
                     <span className="muted small" title={t.armyWonUnknown}>
                       {" "}
                       ?

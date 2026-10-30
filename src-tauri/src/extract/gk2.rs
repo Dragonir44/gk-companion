@@ -340,6 +340,26 @@ fn army(b: &Value, names: &mut Names) -> Option<Army> {
             t.match_indices(id).any(|(i, _)| !t[i + id.len()..].starts_with(|c: char| c.is_ascii_alphanumeric() || c == '_'))
         })
     };
+    // Quests that spawn a battle (as they start or end), and battles some
+    // quest despawns.
+    let calls = |name: &str, part: &str, q: &Value| -> Vec<String> {
+        list(q, part)
+            .iter()
+            .filter_map(|e| text(e, "expressionString").strip_prefix(&format!("{name}(\"")))
+            .filter_map(|rest| rest.split('"').next())
+            .map(str::to_string)
+            .collect()
+    };
+    let mut spawned_by: HashMap<String, Vec<String>> = HashMap::new();
+    let mut despawned: std::collections::HashSet<String> = Default::default();
+    for q in list(b, "questDefs") {
+        for part in ["execExpressionsStart", "execExpressionsFinish"] {
+            for id in calls("Spawn_FightingLvl", part, q) {
+                spawned_by.entry(id).or_default().push(text(q, "id").to_string());
+            }
+            despawned.extend(calls("Despawn_FightingLvl", part, q));
+        }
+    }
     let fights: Vec<Fight> = list(b, "fightDefinitions")
         .iter()
         .filter(|f| num(f, "defencePowerLock") > 0.0 && in_quests(text(f, "id")))
@@ -353,6 +373,8 @@ fn army(b: &Value, names: &mut Names) -> Option<Army> {
                 no_towers: flag(f, "isTowersUnavailable"),
                 no_barricades: flag(f, "isBarricadesUnavailable"),
                 won_by: won_by(id),
+                offered_by: spawned_by.get(id).cloned().unwrap_or_default(),
+                repeatable: won_by(id).is_empty() && spawned_by.contains_key(id) && !despawned.contains(id),
             })
         })
         .collect();

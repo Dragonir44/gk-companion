@@ -120,12 +120,14 @@ export function isWon(fight: Fight, finished: Set<string>): boolean | undefined 
 }
 
 /**
- * Not offered yet: the story hasn't reached it (none of its victory quests
- * is active or finished). Undefined when the game doesn't tell.
+ * Not offered yet: the story hasn't reached it (none of the quests that
+ * spawn it or that its victory finishes is active or finished). Undefined
+ * when the game doesn't tell.
  */
 export function isLocked(fight: Fight, finished: Set<string>, active: Set<string>): boolean | undefined {
-  if (!fight.wonBy?.length) return undefined;
-  return !fight.wonBy.some((q) => finished.has(q) || active.has(q));
+  const quests = [...(fight.wonBy ?? []), ...(fight.offeredBy ?? [])];
+  if (!quests.length) return undefined;
+  return !quests.some((q) => finished.has(q) || active.has(q));
 }
 
 /** How far a battle is: ready now, once geared, once squads are full, or out of reach. */

@@ -50,6 +50,10 @@ export interface Fight {
   noBarricades?: boolean;
   /** Quests its victory finishes: won once one is finished in the save. */
   wonBy?: string[];
+  /** Quests that make it appear: offered once one is active or finished. */
+  offeredBy?: string[];
+  /** Nothing ends it (the arena's last round): fought again and again, never won. */
+  repeatable?: boolean;
 }
 
 export interface Defence {
