@@ -237,12 +237,18 @@ fn morgue(b: &Value, recipes: &[Recipe]) -> Option<Morgue> {
             None => extras.push(id.to_string()),
         }
     }
+    // Fluids are made quality-less (`embalm_red`) and stored with their
+    // quality (`embalm_red:2`); embalming entries no recipe makes are tests.
+    let made = |id: &str| {
+        let base = id.split(':').next().unwrap_or(id);
+        recipes.iter().any(|r| r.outputs.iter().any(|o| o.item == base))
+    };
     let embalms = recipes
         .iter()
         .filter(|r| r.stations.iter().any(|s| s.starts_with("embalm_table")))
         .filter_map(|r| list(b, "craftDefs").iter().find(|c| text(c, "id") == r.id))
         .map(|c| text(c, "autopsyItemId").to_string())
-        .filter(|id| !id.is_empty())
+        .filter(|id| !id.is_empty() && made(id))
         .collect();
     let collars = items
         .iter()

@@ -37,6 +37,8 @@ export type Step =
   | { kind: "insert"; slot: number; item: string; recipe?: Recipe }
   | { kind: "swap"; slot: number; from: string; item: string; recipe?: Recipe }
   | { kind: "remove"; slot?: number; item: string; recipe?: Recipe }
+  /** Turn `from` (a spare organ, or the one taken out) into `item` with an organ improver. */
+  | { kind: "improve"; slot: number; from: string; item: string; recipe: Recipe }
   | { kind: "embalm"; item: string; recipe?: Recipe };
 
 export interface MorguePlan {
@@ -92,12 +94,19 @@ export function totals(data: GameData, body: Body): Totals {
  * colour are made: per slot, the organ with the most (ties: fewest of the
  * other colour, kept for other bodies), extras that take some away
  * removed, then fluids not yet used, in free slots or in place of an extra
- * worth less. For red, a collar caps what counts:
+ * worth less. An organ not in stock can come from an organ improver, if
+ * `canMake` allows its recipe (the save's unlocked crafts). For red, a collar caps what counts:
  * changes stop once it is reached, using the fewest and smallest ones.
  * `have` limits organs and fluids to a stock; without it everything is
  * available.
  */
-export function bestBody(data: GameData, body: Body, goal: Goal, have?: Record<string, number>): MorguePlan {
+export function bestBody(
+  data: GameData,
+  body: Body,
+  goal: Goal,
+  have?: Record<string, number>,
+  canMake: (r: Recipe) => boolean = () => true,
+): MorguePlan {
   const m = data.morgue;
   const before = totals(data, body);
   if (!m) return { before, after: before, body, steps: [], used: {} };
@@ -129,12 +138,32 @@ export function bestBody(data: GameData, body: Body, goal: Goal, have?: Record<s
     return keep;
   });
 
+  // Organ improvers: any organ of a slot + an improver -> that slot's best
+  // organ of the improver's colour (a recipe at the formulation bench).
+  const improvers = new Map<string, Recipe>();
+  for (const r of data.recipes) {
+    const slot = r.inputs.find((i) => i.group && m.slots.includes(i.item));
+    const out = r.outputs[0]?.item;
+    if (slot && out && r.inputs.length === 2 && m.organs[m.slots.indexOf(slot.item)].includes(out)) improvers.set(out, r);
+  }
+  // An organ to improve: the spare one worth least, else the body's own.
+  const spare = (slot: number, except: string) =>
+    m.organs[slot].filter((id) => id !== except && !mistakes.has(id) && left(id) >= 1).sort((a, b) => cmp(a, b))[0];
+  const improvable = (slot: number, id: string, cur: string | null) => {
+    const r = improvers.get(id);
+    const improver = r?.inputs.find((i) => !i.group)?.item;
+    if (!r || !improver || left(improver) < 1 || !canMake(r)) return undefined;
+    const stocked = spare(slot, id);
+    const from = stocked ?? (cur && !mistakes.has(cur) ? cur : undefined);
+    return from ? { recipe: r, improver, from, stocked: !!stocked } : undefined;
+  };
+
   // Per slot, the best change that adds skulls (an empty slot beats a mistake).
   const changes = body.organs
     .map((cur, slot) => {
       let best: string | null = cur;
       for (const id of [null, ...m.organs[slot]]) {
-        if (id === cur || (id && (mistakes.has(id) || left(id) < 1))) continue;
+        if (id === cur || (id && (mistakes.has(id) || (left(id) < 1 && !improvable(slot, id, cur))))) continue;
         if (cmp(id, best) > 0) best = id;
       }
       return { slot, cur, best, gain: value(best)[0] - value(cur)[0] };
@@ -147,16 +176,22 @@ export function bestBody(data: GameData, body: Body, goal: Goal, have?: Record<s
     let k = 0;
     while (k + 1 < changes.length && changes[k + 1].gain >= need) k++;
     const { slot, cur, best } = changes.splice(k, 1)[0];
+    if (best !== null && left(best) < 1) {
+      // Not in stock: made with an improver (checked again: an earlier slot may have used it).
+      const imp = improvable(slot, best, cur);
+      if (!imp) continue;
+      take(imp.improver);
+      if (imp.stocked) take(imp.from);
+      steps.push({ kind: "improve", slot, from: imp.from, item: best, recipe: imp.recipe });
+    } else if (best !== null) take(best);
     next.organs[slot] = best;
     if (best === null) steps.push({ kind: "remove", slot, item: cur!, recipe: recipes.get(`extract_${cur}`) });
-    else {
-      take(best);
+    else
       steps.push(
         cur === null
           ? { kind: "insert", slot, item: best, recipe: recipes.get(`insert_${best}`) }
           : { kind: "swap", slot, from: cur, item: best, recipe: recipes.get(`change_${best}`) },
       );
-    }
   }
 
   // Best quality of each fluid first; one of each fluid per body.

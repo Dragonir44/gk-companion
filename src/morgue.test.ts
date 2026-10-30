@@ -25,10 +25,25 @@ const data: GameData = {
     item("embalm_red_white", [1, -1]),
     item("embalm_white", [0, 2]),
     { id: "collar_bronze", collar: 5 },
+    { id: "organ_improver_red" },
   ],
   objects: [],
   groups: {},
-  recipes: [],
+  recipes: [
+    {
+      id: "organ_improver_red_heart",
+      kind: "craft",
+      stations: ["formulation_bench"],
+      inputs: [
+        { item: "gr_heart", count: 1, group: true },
+        { item: "organ_improver_red", count: 1 },
+      ],
+      outputs: [{ item: "heart_2_0", count: 1 }],
+      hidden: false,
+      needsUnlock: true,
+      mastery: 7,
+    },
+  ],
   techs: [],
   branches: [],
   locales: {},
@@ -94,6 +109,24 @@ describe("morgue", () => {
     // One short: the +2 heart rather than the +3 skin.
     const q = bestBody(data, { ...body, organs: ["skin_0_0", "heart_0_1"], extras: ["fat", "fat", "fat", "fat"] }, "red");
     expect(q.steps.map((s) => s.item)).toEqual(["heart_2_0"]);
+  });
+
+  it("makes a missing organ with an improver, from a spare one or the body's own", () => {
+    const own = { ...body, organs: ["skin_3_0", "heart_0_1"], extras: [], collar: undefined };
+    const recipe = data.recipes[0];
+    // A spare heart in stock: improved, then swapped in.
+    const p = bestBody(data, own, "red", { organ_improver_red: 1, heart_0_1: 2 });
+    expect(p.steps).toEqual([
+      { kind: "improve", slot: 1, from: "heart_0_1", item: "heart_2_0", recipe },
+      { kind: "swap", slot: 1, from: "heart_0_1", item: "heart_2_0", recipe: undefined },
+    ]);
+    expect(p.used).toEqual({ organ_improver_red: 1, heart_0_1: 1 });
+    // No spare: the body's own heart is taken out and improved.
+    expect(bestBody(data, own, "red", { organ_improver_red: 1 }).used).toEqual({ organ_improver_red: 1 });
+    // Recipe not unlocked: no improving.
+    expect(bestBody(data, own, "red", { organ_improver_red: 1 }, () => false).steps).toEqual([]);
+    // No improver: nothing to do for the heart.
+    expect(bestBody(data, own, "red", {}).steps).toEqual([]);
   });
 
   it("only uses what is in stock", () => {

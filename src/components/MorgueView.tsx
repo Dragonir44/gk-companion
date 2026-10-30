@@ -34,7 +34,7 @@ export function MasteryTag({ recipe }: { recipe?: Recipe }) {
 
 /** Builds a body (from scratch or a save zombie) and shows the best one for the goal. */
 export function MorgueView() {
-  const { t, n, idx, stock, hasSave } = useGame();
+  const { t, n, idx, stock, hasSave, available } = useGame();
   const data = idx.data;
   const m = data.morgue;
   const { goal, body: stored } = useStore((s) => s.morgue);
@@ -43,7 +43,7 @@ export function MorgueView() {
   const [stockOnly, setStockOnly] = useState(true);
   const body = useMemo(() => stored ?? emptyBody(data), [stored, data]);
   const have = stockOnly && hasSave ? stock.total : undefined;
-  const plan = useMemo(() => bestBody(data, body, goal, have), [data, body, goal, have]);
+  const plan = useMemo(() => bestBody(data, body, goal, have, available), [data, body, goal, have, available]);
   const items = useMemo(() => new Map(data.items.map((e) => [e.id, e])), [data]);
 
   if (!m) return <section className="panel muted center-text">{t.morgueNone}</section>;
@@ -54,6 +54,7 @@ export function MorgueView() {
     return `${n.name(id)} (${r} / ${w})`;
   };
   const used = body.extras.length + body.embalms.length;
+  const improved = new Set(plan.steps.flatMap((s) => (s.kind === "improve" ? [s.slot] : [])));
 
   return (
     <section className="bench">
@@ -189,9 +190,9 @@ export function MorgueView() {
                 <span>{stepText(t, n.name, s)}</span>
                 <Skulls s={items.get(s.item)?.skulls} />
                 <MasteryTag recipe={s.recipe} />
-                {have && s.kind !== "remove" && (
+                {have && stockShown(s, improved) && (
                   <span className="muted small">
-                    {fmtNum(have[s.item] ?? 0)} {t.zombieInStock}
+                    {fmtNum(have[stockShown(s, improved)!] ?? 0)} {t.zombieInStock}
                   </span>
                 )}
               </li>
@@ -203,6 +204,13 @@ export function MorgueView() {
   );
 }
 
+/** The stocked item a step takes: the improver for an improvement, nothing for an improved organ. */
+function stockShown(s: Step, improved: Set<number>): string | undefined {
+  if (s.kind === "improve") return s.recipe.inputs.find((i) => !i.group)?.item;
+  if ((s.kind === "swap" || s.kind === "insert") && improved.has(s.slot)) return undefined;
+  return s.kind === "remove" ? undefined : s.item;
+}
+
 function stepText(t: Strings, name: (id: string) => string, s: Step): string {
   switch (s.kind) {
     case "insert":
@@ -211,6 +219,12 @@ function stepText(t: Strings, name: (id: string) => string, s: Step): string {
       return fmt(t.stepSwap, { from: name(s.from), item: name(s.item) });
     case "remove":
       return fmt(t.stepRemove, { item: name(s.item) });
+    case "improve":
+      return fmt(t.stepImprove, {
+        item: name(s.item),
+        from: name(s.from),
+        improver: name(s.recipe.inputs.find((i) => !i.group)?.item ?? ""),
+      });
     case "embalm":
       return fmt(t.stepEmbalm, { item: name(s.item) });
   }
