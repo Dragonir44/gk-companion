@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { GameCtx } from "./components/ctx";
 import { ListPanel } from "./components/ListPanel";
+import { MorgueView } from "./components/MorgueView";
 import { ReportMenu } from "./components/ReportMenu";
 import { ResearchTree } from "./components/ResearchTree";
 import { Resizer } from "./components/Resizer";
@@ -13,14 +14,24 @@ import { Search } from "./components/Search";
 import { SitesView } from "./components/SitesView";
 import { StockView } from "./components/StockView";
 import { UpdateBanner } from "./components/UpdateBanner";
+import { ZombiesView } from "./components/ZombiesView";
 import { fmt, LANGUAGES, strings, type Strings } from "./i18n";
 import { namer } from "./names";
 import { EMPTY_STOCK, stockOf, unlockedBy, unlocks } from "./progress";
 import { DEFAULT_COLUMNS, useStore } from "./store";
-import { GAMES } from "./types";
+import { GAMES, type View } from "./types";
 import "./App.css";
 
 const SAVE_POLL_MS = 4000;
+
+const VIEW_LABELS: Record<View, (t: Strings) => string> = {
+  planner: (t) => t.planner,
+  research: (t) => t.research,
+  sites: (t) => t.sitesView,
+  stock: (t) => t.stockView,
+  morgue: (t) => t.morgueView,
+  zombies: (t) => t.zombiesView,
+};
 
 /** Game folder in the status bar: change it, or go back to detection. */
 function FolderMenu(props: { t: Strings; path?: string; manual: boolean; onChoose(): void; onReset(): void }) {
@@ -118,6 +129,13 @@ export default function App() {
     };
   }, [g?.index, lang, t, progress, unlockers, useStock, onlyAvailable]);
 
+  // Morgue and zombies only exist when the game data has them (gk2).
+  const data = g?.index?.data;
+  const views: View[] = ["planner", "research", "sites", "stock"];
+  if (data?.morgue) views.push("morgue");
+  if (data?.zombieTree?.length) views.push("zombies");
+  const shown: View = views.includes(view) ? view : "planner";
+
   const languages = Object.keys(g?.result?.data.locales ?? LANGUAGES).filter((l) => l in LANGUAGES);
   const status = statuses.find((s) => s.game === game);
 
@@ -147,9 +165,9 @@ export default function App() {
           ))}
         </nav>
         <nav className="views">
-          {(["planner", "research", "sites", "stock"] as const).map((v) => (
-            <button key={v} className={v === view ? "active" : ""} onClick={() => setView(v)}>
-              {v === "stock" ? t.stockView : v === "sites" ? t.sitesView : t[v]}
+          {views.map((v) => (
+            <button key={v} className={v === shown ? "active" : ""} onClick={() => setView(v)}>
+              {VIEW_LABELS[v](t)}
             </button>
           ))}
         </nav>
@@ -193,17 +211,25 @@ export default function App() {
         </main>
       ) : ctx ? (
         <GameCtx.Provider value={ctx}>
-          {view === "research" ? (
+          {shown === "research" ? (
             <main className="layout-research">
               <ResearchTree />
             </main>
-          ) : view === "sites" ? (
+          ) : shown === "sites" ? (
             <main className="layout-research">
               <SitesView />
             </main>
-          ) : view === "stock" ? (
+          ) : shown === "stock" ? (
             <main className="layout-research">
               <StockView />
+            </main>
+          ) : shown === "morgue" ? (
+            <main className="layout-research">
+              <MorgueView />
+            </main>
+          ) : shown === "zombies" ? (
+            <main className="layout-research">
+              <ZombiesView />
             </main>
           ) : (
             <main className="layout" style={{ gridTemplateColumns: `${columns[0]}px 8px ${columns[1]}px 8px minmax(320px, 1fr)` }}>

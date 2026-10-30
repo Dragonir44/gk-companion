@@ -10,6 +10,14 @@ It follows your latest save: what you have researched, what your chests hold
 the construction sites left (repairs, blockages, town plots), numbered on the
 game's own world map, ready to add to a list.
 
+For Graveyard Keeper 2 there are two more tools. The **Morgue** shows a body's
+red and white skulls and the organ swaps and embalming that get the most of
+one colour: red for a zombie (up to what its collar keeps), white for a
+burial, using what your chests hold. **Zombies** shows, for a work station and
+the crafts a zombie will do there, the mastery needed and, for each tool, the
+cheapest talent nodes to buy (each one takes a red skull) — starting from one
+of your zombies as read from the save, or a new one.
+
 The app ships **no game content**. On launch it reads recipes, techs and texts
 (11 languages) straight from your own install, so it stays in sync with game
 updates and nothing belonging to the publisher is redistributed.
@@ -59,9 +67,13 @@ holding the game's `.app`, or the `.app` itself). It reads everything from there
   gk2: Odin Serializer binary (`knowledgeSystem` lists); gk1: the game's own
   serialization, first documented by NetroScript's
   [Graveyard-Keeper-Savefile-Editor](https://github.com/NetroScript/Graveyard-Keeper-Savefile-Editor) (MIT).
+  gk2 zombies (`save/zombies.rs`): body items, equipped tool and collar,
+  talent nodes bought and points left.
 - `src/calc.ts` — the planner: resolves a list down to raw materials,
   aggregates shared intermediates before rounding crafts, breaks crafting
   loops, honours per-item recipe choices and owned quantities.
+- `src/morgue.ts`, `src/zombies.ts` — skull counts and the best body for a
+  goal; the cheapest zombie talent nodes for a job, per tool.
 
 ## Releasing
 

@@ -1304,3 +1304,150 @@ li.craft-row.leaf {
 .site.focus {
   border-color: var(--accent);
 }
+
+/* --- Morgue & zombies ------------------------------------------------- */
+
+.bench {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(300px, 400px) minmax(0, 1fr);
+  gap: 12px;
+}
+@media (max-width: 900px) {
+  .bench {
+    grid-template-columns: 1fr;
+    overflow-y: auto;
+  }
+}
+.bench-form,
+.bench-result {
+  overflow-y: auto;
+}
+.bench h3 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin: 10px 0 2px;
+}
+.bench p {
+  margin: 0;
+}
+.bench-row,
+.field {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.field {
+  flex-direction: column;
+  align-items: stretch;
+  font-size: 12px;
+  color: var(--muted);
+}
+.bench-row select {
+  flex: 1;
+}
+.slots {
+  display: grid;
+  gap: 4px;
+}
+.slot {
+  display: grid;
+  grid-template-columns: 24px 90px minmax(0, 1fr);
+  gap: 6px;
+  align-items: center;
+}
+.slot-name {
+  font-size: 12px;
+  color: var(--muted);
+}
+.chip.on {
+  border-color: var(--accent);
+}
+.skulls {
+  display: inline-flex;
+  gap: 4px;
+}
+.skull {
+  display: inline-block;
+  min-width: 22px;
+  padding: 0 5px;
+  border-radius: 999px;
+  font-size: 12px;
+  text-align: center;
+  font-weight: 600;
+}
+.skull-r {
+  background: var(--pt-r);
+  color: #fff;
+}
+.skull-w {
+  background: var(--text);
+  color: var(--bg);
+}
+.skull-table th {
+  text-align: right;
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: normal;
+}
+.skull-table tr.best td {
+  font-weight: 600;
+}
+.steps-list {
+  margin: 0;
+  padding-left: 22px;
+  display: grid;
+  gap: 6px;
+}
+.steps-list li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.mastery {
+  font-size: 11px;
+  padding: 0 6px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+.bench .note {
+  color: var(--accent);
+}
+.craft-picks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.craft-picks label {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 2px 0;
+}
+.craft-picks .grow {
+  flex: 1;
+}
+.options tr {
+  cursor: pointer;
+}
+.options th {
+  white-space: nowrap;
+  text-align: left;
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: normal;
+}
+.options tr.active td {
+  background: var(--panel-2);
+}
+.options tr.active td:first-child {
+  box-shadow: inset 3px 0 var(--accent);
+}
+.options tr.out {
+  color: var(--muted);
+}

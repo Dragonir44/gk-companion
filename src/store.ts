@@ -4,6 +4,7 @@ import { create } from "zustand";
 
 import { buildIndex, type Index } from "./calc";
 import { defaultLang } from "./i18n";
+import type { Body, Goal } from "./morgue";
 import type { CraftList, GameId, GameStatus, ListsFile, LoadResult, Progress, SaveSlot, SaveSlots, View } from "./types";
 
 interface GameState {
@@ -47,6 +48,8 @@ interface State {
   saves: Partial<Record<GameId, SaveState>>;
   /** Followed save per game: slot id, NO_SAVE, or unset for the latest. */
   saveChoice: Partial<Record<GameId, string>>;
+  /** Body on the morgue table (not saved: it changes with every corpse). */
+  morgue: { goal: Goal; body?: Body };
 
   init(): Promise<void>;
   selectGame(game: GameId): void;
@@ -62,6 +65,7 @@ interface State {
   setOnlyAvailable(v: boolean): void;
   refreshSaves(game: GameId): Promise<void>;
   setSaveChoice(game: GameId, choice: string | undefined): void;
+  setMorgue(m: Partial<State["morgue"]>): void;
 
   createList(name: string): void;
   selectList(id: string): void;
@@ -139,6 +143,7 @@ export const useStore = create<State>((set, get) => {
     columns: DEFAULT_COLUMNS,
     useStock: true,
     onlyAvailable: false,
+    morgue: { goal: "red" },
     statuses: [],
     games: {},
     lists: [],
@@ -243,6 +248,10 @@ export const useStore = create<State>((set, get) => {
     setOnlyAvailable(onlyAvailable) {
       set({ onlyAvailable });
       persist();
+    },
+
+    setMorgue(m) {
+      set((s) => ({ morgue: { ...s.morgue, ...m } }));
     },
 
     async refreshSaves(game) {
