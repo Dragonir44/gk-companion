@@ -8,7 +8,14 @@
 //! Where it works is told three ways: its `attachedWgoDataUniqueId` (the
 //! station's `uniqueId`), or the place pointing at its body's `uniqueId`,
 //! as `workerId` (stations) or a dock point's `occupiedBy` (the factory
-//! carousel, the barracks).
+//! carousel, the barracks). Each barracks slot is a squad, told apart by
+//! its own `uniqueId` (`place`).
+//!
+//! `militaryBaseData/baseBuildings` lists the defences built (towers,
+//! barricades) by `uniqueId`.
+//!
+//! A `uniqueId` (an `SGuid` node) is written once; later mentions are
+//! references to that node, resolved here to the guid.
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -35,6 +42,13 @@ pub struct Zombie {
     pub tool: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub collar: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub weapon: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub armor: Option<String>,
+    /// `uniqueId` of the station instance (one barracks slot = one squad).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub place: Option<String>,
     /// Talent tree nodes bought.
     pub studied: Vec<String>,
     /// Points left to spend, keyed r, g, b.
@@ -63,34 +77,78 @@ struct Wgo {
     attached: Option<String>,
     hand: Option<String>,
     collar: Option<String>,
+    weapon: Option<String>,
+    armor: Option<String>,
     studied: Vec<String>,
     points: BTreeMap<String, i64>,
 }
 
-pub fn zombies(bytes: &[u8]) -> Result<Vec<Zombie>, SaveError> {
+/// Zombies, and the defences built at the military base (object ids).
+pub struct Army {
+    pub zombies: Vec<Zombie>,
+    pub defences: Vec<String>,
+}
+
+pub fn army(bytes: &[u8]) -> Result<Army, SaveError> {
     let mut r = Reader::new(bytes);
     // Frame names: the node's name, "" when unnamed, `ARRAY` for arrays.
     let mut stack: Vec<String> = Vec::new();
     let mut wgo: Option<Wgo> = None;
     let mut found: Vec<Wgo> = Vec::new();
     let mut objects: HashMap<String, String> = HashMap::new();
-    // Body `uniqueId` -> id of the place holding it.
+    // Body `uniqueId` -> uniqueId of the place holding it.
     let mut held: HashMap<String, String> = HashMap::new();
+    let mut base: Vec<String> = Vec::new();
+    // SGuid node id -> guid, and the SGuid node being read (depth, id).
+    let mut guids: HashMap<i32, String> = HashMap::new();
+    let mut guid_node: Option<(usize, i32)> = None;
+    // A resolved reference pushed a frame for one entry.
+    let mut pushed = false;
     loop {
-        let entry = r.next_entry()?;
+        if std::mem::take(&mut pushed) {
+            stack.pop();
+        }
+        let entry = match r.next_entry()? {
+            // Stands for the node it points to: `<name> { id = guid }`.
+            Entry::Ref(name, id) => match guids.get(&id) {
+                Some(g) => {
+                    stack.push(name.unwrap_or_default());
+                    pushed = true;
+                    Entry::Str(Some("id".into()), g.clone())
+                }
+                None => Entry::Other(name),
+            },
+            e => e,
+        };
         // Path below the object's node (owned: the stack changes below).
         let path: Vec<String> = wgo.as_ref().map(|w| stack[w.depth + 1..].to_vec()).unwrap_or_default();
         let rel: Vec<&str> = path.iter().map(String::as_str).collect();
         match entry {
-            Entry::Start(name, _) => {
+            Entry::Start(name, ty) => {
                 let n = stack.len();
                 if name.is_none() && n >= 2 && stack[n - 1] == ARRAY && stack[n - 2] == "wgoDataList" {
                     wgo = Some(Wgo { depth: n, ..Default::default() });
+                }
+                if ty.is_some_and(|t| t.starts_with("SGuid")) {
+                    guid_node = r.node_id.map(|id| (n + 1, id));
                 }
                 stack.push(name.unwrap_or_default());
             }
             Entry::StartArray => stack.push(ARRAY.into()),
             Entry::Str(field, value) => {
+                let n = stack.len();
+                if let Some((depth, id)) = guid_node {
+                    if depth == n && field.as_deref() == Some("id") && !pushed {
+                        guids.insert(id, value.clone());
+                        guid_node = None;
+                    }
+                }
+                if field.as_deref() == Some("id")
+                    && n >= 4
+                    && stack[n - 4..] == ["militaryBaseData", "baseBuildings", ARRAY, ""].map(String::from)
+                {
+                    base.push(value.clone());
+                }
                 let Some(w) = &mut wgo else { continue };
                 let guid = || Some(value.clone()).filter(|v| v != NO_GUID);
                 match (rel.as_slice(), field.as_deref()) {
@@ -105,6 +163,8 @@ pub fn zombies(bytes: &[u8]) -> Result<Vec<Zombie>, SaveError> {
                     }
                     (["equippedHand"], Some("id")) => w.hand = guid(),
                     (["equippedCollar"], Some("id")) => w.collar = guid(),
+                    (["equippedWeapon"], Some("id")) => w.weapon = guid(),
+                    (["equippedArmor"], Some("id")) => w.armor = guid(),
                     (["zombieItem", "inventory", ARRAY, ""], Some("id")) => w.item.0 = Some(value.clone()),
                     (["zombieItem", "inventory", ARRAY, "", "uniqueId"], Some("id")) => w.item.1 = Some(value.clone()),
                     (["talentData", ARRAY, "", "studiedLevelUps", ARRAY], None) => w.studied.push(value.clone()),
@@ -137,8 +197,10 @@ pub fn zombies(bytes: &[u8]) -> Result<Vec<Zombie>, SaveError> {
                     if let Some(g) = &w.guid {
                         objects.insert(g.clone(), w.id.clone());
                     }
-                    for body in &w.holds {
-                        held.insert(body.clone(), w.id.clone());
+                    if let Some(g) = &w.guid {
+                        for body in &w.holds {
+                            held.insert(body.clone(), g.clone());
+                        }
                     }
                     if w.zombie {
                         found.push(w);
@@ -152,31 +214,67 @@ pub fn zombies(bytes: &[u8]) -> Result<Vec<Zombie>, SaveError> {
     let equipped = |items: &[(String, Option<String>)], guid: &Option<String>| {
         guid.as_ref().and_then(|g| items.iter().find(|(_, u)| u.as_ref() == Some(g)).map(|(id, _)| id.clone()))
     };
-    Ok(found
+    let zombies = found
         .into_iter()
-        .map(|w| Zombie {
-            name: w.name.clone().unwrap_or_default(),
-            station: w
-                .attached
-                .as_ref()
-                .and_then(|g| objects.get(g))
-                .or_else(|| w.body.as_ref().and_then(|b| held.get(b)))
-                .cloned(),
-            tool: equipped(&w.items, &w.hand),
-            collar: equipped(&w.items, &w.collar),
-            items: w.items.into_iter().map(|(id, _)| id).collect(),
-            object: w.id,
-            zone: w.zone,
-            studied: w.studied,
-            points: w.points,
+        .map(|w| {
+            let place = w.attached.clone().filter(|g| objects.contains_key(g)).or_else(|| w.body.as_ref().and_then(|b| held.get(b).cloned()));
+            Zombie {
+                name: w.name.clone().unwrap_or_default(),
+                station: place.as_ref().and_then(|g| objects.get(g)).cloned(),
+                tool: equipped(&w.items, &w.hand),
+                collar: equipped(&w.items, &w.collar),
+                weapon: equipped(&w.items, &w.weapon),
+                armor: equipped(&w.items, &w.armor),
+                place,
+                items: w.items.into_iter().map(|(id, _)| id).collect(),
+                object: w.id,
+                zone: w.zone,
+                studied: w.studied,
+                points: w.points,
+            }
         })
-        .collect())
+        .collect();
+    let defences = base.iter().filter_map(|g| objects.get(g).cloned()).collect();
+    Ok(Army { zombies, defences })
 }
 
 #[cfg(test)]
 mod tests {
     use super::super::testbin::*;
     use super::*;
+
+    /// Named reference node (0x01) of type `SGuid` with its node id.
+    fn guid_node(b: &mut Vec<u8>, name: &str, node: i32, id: &str) {
+        b.push(0x01);
+        b.extend(s8(name));
+        b.push(0x2F);
+        b.extend(0i32.to_le_bytes());
+        b.extend(s8("SGuid, Assembly-CSharp"));
+        b.extend(node.to_le_bytes());
+        str_field(b, "id", id);
+        b.push(0x05);
+    }
+
+    #[test]
+    fn resolves_guid_references() {
+        let mut b = Vec::new();
+        start(&mut b, None);
+        start(&mut b, Some("wgoDataList"));
+        arr(&mut b);
+        start(&mut b, None);
+        str_field(&mut b, "id", "tower_2_pre");
+        guid_node(&mut b, "uniqueId", 7, "t-1");
+        b.push(0x05);
+        b.extend([0x07, 0x05]);
+        // The base lists it by reference to node 7 (unnamed internal ref, 0x0A).
+        start(&mut b, Some("militaryBaseData"));
+        start(&mut b, Some("baseBuildings"));
+        arr(&mut b);
+        b.push(0x0A);
+        b.extend(7i32.to_le_bytes());
+        b.extend([0x07, 0x05, 0x05, 0x05]);
+        assert_eq!(army(&b).unwrap().defences, vec!["tower_2_pre".to_string()]);
+    }
 
     fn guid(b: &mut Vec<u8>, name: &str, id: &str) {
         start(b, Some(name));
@@ -238,6 +336,7 @@ mod tests {
         b.push(0x05);
         start(&mut b, None);
         str_field(&mut b, "id", "zombie_carousel");
+        guid(&mut b, "uniqueId", "c-1");
         start(&mut b, Some("mainWgoPartData"));
         start(&mut b, Some("dockPointDataList"));
         arr(&mut b);
@@ -246,8 +345,9 @@ mod tests {
         b.extend([0x05, 0x07, 0x05, 0x05, 0x05]);
         b.extend([0x07, 0x05, 0x05]);
 
-        let got = zombies(&b).unwrap();
+        let got = army(&b).unwrap().zombies;
         assert_eq!(got[1].station.as_deref(), Some("zombie_carousel"));
+        assert_eq!(got[1].place.as_deref(), Some("c-1"));
         assert_eq!(
             got[..1],
             [Zombie {
@@ -258,6 +358,9 @@ mod tests {
                 items: vec!["skin_3_0:3".into(), "axe_2".into(), "collar_gold".into()],
                 tool: Some("axe_2".into()),
                 collar: Some("collar_gold".into()),
+                weapon: None,
+                armor: None,
+                place: Some("s-1".into()),
                 studied: vec!["z_building_lvl_up_1_1".into(), "ztalent_logger".into()],
                 points: BTreeMap::from([("r".into(), 120)]),
             }]

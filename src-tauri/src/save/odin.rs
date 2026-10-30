@@ -19,6 +19,8 @@ pub enum Entry {
     Int(Option<String>, i64),
     /// Floating-point values (float, double).
     Float(Option<String>, f64),
+    /// A reference to a node read earlier, by its id (`Reader::node_id`).
+    Ref(Option<String>, i32),
     /// Any other value, skipped.
     Other(Option<String>),
     EndOfStream,
@@ -29,6 +31,9 @@ pub struct Reader<'a> {
     pos: usize,
     /// Type ids defined earlier in the stream (`TypeName` entries).
     types: Vec<Option<String>>,
+    /// Id of the node just started, for reference nodes (None for structs):
+    /// later entries may point to it (`Entry::Ref`) instead of repeating it.
+    pub node_id: Option<i32>,
 }
 
 const NAMED_START_REF: u8 = 0x01;
@@ -50,7 +55,7 @@ fn is_named(code: u8) -> bool {
 
 impl<'a> Reader<'a> {
     pub fn new(buf: &'a [u8]) -> Self {
-        Self { buf, pos: 0, types: Vec::new() }
+        Self { buf, pos: 0, types: Vec::new(), node_id: None }
     }
 
     fn take(&mut self, n: usize) -> Result<&'a [u8], SaveError> {
@@ -116,10 +121,13 @@ impl<'a> Reader<'a> {
         Ok(match base {
             NAMED_START_REF => {
                 let ty = self.type_entry()?;
-                self.i32()?; // reference id
+                self.node_id = Some(self.i32()?);
                 Entry::Start(name, ty)
             }
-            NAMED_START_STRUCT => Entry::Start(name, self.type_entry()?),
+            NAMED_START_STRUCT => {
+                self.node_id = None; // structs are values, never referenced
+                Entry::Start(name, self.type_entry()?)
+            }
             END_OF_NODE => Entry::End,
             START_ARRAY => {
                 self.take(8)?; // element count
@@ -132,8 +140,9 @@ impl<'a> Reader<'a> {
                 self.take(count * size)?;
                 Entry::Other(name)
             }
-            0x09 | 0x0B => {
-                self.take(4)?; // internal reference / external by index
+            0x09 => Entry::Ref(name, self.i32()?),
+            0x0B => {
+                self.take(4)?; // external reference by index
                 Entry::Other(name)
             }
             0x0D | 0x29 | 0x23 => {

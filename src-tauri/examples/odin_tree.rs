@@ -10,13 +10,18 @@ fn main() {
         let e = match r.next_entry() { Ok(e) => e, Err(e) => { println!("ERR {e:?}"); break } };
         let p = "  ".repeat(d);
         match e {
-            Entry::Start(n, t) => { println!("{p}{} <{}>", n.unwrap_or_default(), t.unwrap_or_default()); d += 1 }
+            Entry::Start(n, t) => {
+                let id = r.node_id.map(|i| format!(" #{i}")).unwrap_or_default();
+                println!("{p}{} <{}>{id}", n.unwrap_or_default(), t.unwrap_or_default());
+                d += 1
+            }
             Entry::End => d = d.saturating_sub(1),
             Entry::StartArray => { println!("{p}["); d += 1 }
             Entry::EndArray => { d = d.saturating_sub(1); println!("{p}]") }
             Entry::Str(n, s) => println!("{p}{} = {s:?}", n.unwrap_or_default()),
             Entry::Int(n, v) => println!("{p}{} = {v}", n.unwrap_or_default()),
             Entry::Float(n, v) => println!("{p}{} = {v}", n.unwrap_or_default()),
+            Entry::Ref(n, id) => println!("{p}{} = @{id}", n.unwrap_or_default()),
             Entry::Other(n) => println!("{p}{} = ?", n.unwrap_or_default()),
             Entry::EndOfStream => break,
         }

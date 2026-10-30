@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 /// Bump when the model changes, so stale caches are re-extracted.
-pub const MODEL_VERSION: u32 = 16;
+pub const MODEL_VERSION: u32 = 17;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -64,6 +64,46 @@ pub struct GameData {
     /// every zombie.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub zombie_tree: Vec<TalentNode>,
+    /// Battles and the defences that count for them (gk2).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub army: Option<Army>,
+}
+
+/// What a battle needs and what counts towards it. A battle's power is
+/// the military base's defences (unless the battle rules them out) plus
+/// the power of the squads sent, up to `Fight::squads`. A fighter's power
+/// is its weapon's plus its armour's (`Gear::power`), 0 without both.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Army {
+    /// Battles in game order (named ones with a power requirement).
+    pub fights: Vec<Fight>,
+    /// Defences built at the military base: object id -> power and kind.
+    pub defences: Vec<Defence>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Fight {
+    pub id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// Least power to start it.
+    pub power: u32,
+    pub squads: u32,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub no_towers: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub no_barricades: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Defence {
+    pub object: String,
+    pub power: u32,
+    /// `towers` or `barricades` (the game's object group).
+    pub group: String,
 }
 
 /// Body parts by role. Skull counts are on the items (`Entity::skulls`).
@@ -191,6 +231,27 @@ pub struct Entity {
     /// Work station: the talent its crafts use (gk2).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub work: Option<Work>,
+    /// Weapon or armour a zombie fighter can wear (gk2).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gear: Option<Gear>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Gear {
+    /// Armour; a weapon otherwise.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub armor: bool,
+    /// What it adds to its wearer's power (the item's quality).
+    pub power: u32,
+    /// Weapons: base damage (before perks and potions), reach, pause
+    /// between attacks in seconds.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub damage: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub range: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pause: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -395,6 +456,7 @@ mod tests {
                 collar: None,
                 tool: None,
                 work: None,
+                gear: None,
             }],
             objects: vec![],
             groups: BTreeMap::new(),
@@ -412,6 +474,7 @@ mod tests {
                 zones: BTreeMap::from([("home".into(), [0.25, 0.4])]),
             }),
             morgue: None,
+            army: None,
             zombie_tree: vec![TalentNode {
                 id: "z".into(),
                 talent: "talent_orange".into(),

@@ -153,5 +153,5 @@ pub fn normalize(b: &Value, names: &mut Names) -> Normalized {
         .map(|id| (id, format!("tbranch_{id}")))
         .collect();
 
-    Normalized { items, objects, groups: BTreeMap::new(), recipes, techs, branches, object_icons: Default::default(), alchemy_mixes: Default::default(), zones: vec![], storage: vec![], morgue: None, zombie_tree: vec![] }
+    Normalized { items, objects, groups: BTreeMap::new(), recipes, techs, branches, object_icons: Default::default(), alchemy_mixes: Default::default(), zones: vec![], storage: vec![], morgue: None, zombie_tree: vec![], army: None }
 }

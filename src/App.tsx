@@ -3,6 +3,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { useEffect, useMemo, useState } from "react";
 
 import { GameCtx } from "./components/ctx";
+import { ArmyView } from "./components/ArmyView";
 import { ListPanel } from "./components/ListPanel";
 import { MorgueView } from "./components/MorgueView";
 import { ReportMenu } from "./components/ReportMenu";
@@ -31,6 +32,7 @@ const VIEW_LABELS: Record<View, (t: Strings) => string> = {
   stock: (t) => t.stockView,
   morgue: (t) => t.morgueView,
   zombies: (t) => t.zombiesView,
+  army: (t) => t.armyView,
 };
 
 /** Game folder in the status bar: change it, or go back to detection. */
@@ -134,6 +136,7 @@ export default function App() {
   const views: View[] = ["planner", "research", "sites", "stock"];
   if (data?.morgue) views.push("morgue");
   if (data?.zombieTree?.length) views.push("zombies");
+  if (data?.army) views.push("army");
   const shown: View = views.includes(view) ? view : "planner";
 
   const languages = Object.keys(g?.result?.data.locales ?? LANGUAGES).filter((l) => l in LANGUAGES);
@@ -230,6 +233,10 @@ export default function App() {
           ) : shown === "zombies" ? (
             <main className="layout-research">
               <ZombiesView />
+            </main>
+          ) : shown === "army" ? (
+            <main className="layout-research">
+              <ArmyView />
             </main>
           ) : (
             <main className="layout" style={{ gridTemplateColumns: `${columns[0]}px 8px ${columns[1]}px 8px minmax(320px, 1fr)` }}>

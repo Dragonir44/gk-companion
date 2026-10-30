@@ -63,6 +63,7 @@ pub struct Normalized {
     pub alchemy_mixes: BTreeMap<String, Vec<crate::model::Mix>>,
     pub morgue: Option<crate::model::Morgue>,
     pub zombie_tree: Vec<crate::model::TalentNode>,
+    pub army: Option<crate::model::Army>,
 }
 
 /// Extraction result; icons are optional: data stays usable without them.
@@ -256,6 +257,7 @@ pub fn extract(game: GameId, root: &Path, build_id: Option<&str>) -> Result<Extr
         map: world_map,
         morgue: n.morgue,
         zombie_tree: n.zombie_tree,
+        army: n.army,
     };
     Ok(Extracted { data, icons: icon_set, icons_error })
 }
@@ -409,6 +411,7 @@ fn entity(names: &mut Names, id: &str) -> Entity {
         collar: None,
         tool: None,
         work: None,
+        gear: None,
     }
 }
 

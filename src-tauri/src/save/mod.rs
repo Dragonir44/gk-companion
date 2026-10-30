@@ -72,6 +72,8 @@ pub struct Progress {
     pub objects: Vec<inventory::WorldObject>,
     /// Zombies, with their body and talents (gk2).
     pub zombies: Vec<zombies::Zombie>,
+    /// Defences built at the military base: object ids (gk2).
+    pub defences: Vec<String>,
 }
 
 pub fn supported(game: GameId) -> bool {
@@ -148,8 +150,9 @@ pub fn read_progress(game: GameId, slot: &SaveSlot) -> Result<Progress, SaveErro
         GameId::Gk2 => (knowledge_lists(&bytes)?, Some(inventory::world(&bytes)?)),
     };
     let (inventories, objects) = world.map(|w| (w.containers, w.objects)).unwrap_or_default();
-    let zombies = if game == GameId::Gk2 { zombies::zombies(&bytes)? } else { Vec::new() };
-    Ok(Progress { slot: slot.id.clone(), modified: slot.modified, lists, inventories, objects, zombies })
+    let army = if game == GameId::Gk2 { Some(zombies::army(&bytes)?) } else { None };
+    let (zombies, defences) = army.map(|a| (a.zombies, a.defences)).unwrap_or_default();
+    Ok(Progress { slot: slot.id.clone(), modified: slot.modified, lists, inventories, objects, zombies, defences })
 }
 
 /// String lists directly under `knowledgeSystem/<field>`.
@@ -177,7 +180,7 @@ fn knowledge_lists(bytes: &[u8]) -> Result<BTreeMap<String, Vec<String>>, SaveEr
                     }
                 }
             }
-            Entry::Str(Some(_), _) | Entry::Int(..) | Entry::Float(..) | Entry::Other(_) => {}
+            Entry::Str(Some(_), _) | Entry::Int(..) | Entry::Float(..) | Entry::Ref(..) | Entry::Other(_) => {}
             Entry::EndOfStream => break,
         }
     }

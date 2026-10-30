@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, HashMap};
 use serde_json::Value;
 
 use super::{entity, expr, item_entity, flag, list, num, referenced_objects, text, Names, Normalized};
-use crate::model::{Entity, Mix, Morgue, Recipe, RecipeKind, ReputationLock, Stack, TalentNode, Tech, Tool, Work};
+use crate::model::{Army, Defence, Entity, Fight, Gear, Mix, Morgue, Recipe, RecipeKind, ReputationLock, Stack, TalentNode, Tech, Tool, Work};
 
 /// `BuildingDef.buildingMode` for removal entries (`*_r`), not constructions.
 const BUILDING_MODE_REMOVE: i64 = 2;
@@ -258,6 +258,71 @@ fn morgue(b: &Value, recipes: &[Recipe]) -> Option<Morgue> {
     Some(Morgue { slots, organs, extras, embalms, collars })
 }
 
+/// `ItemDef.type` of swords (the player's only) and of armours.
+const TYPE_SWORD: i64 = 11;
+const TYPE_ARMOR: i64 = 12;
+
+/// What zombies can wear, as the game's equipment window allows: armours,
+/// and weapons that are not tools nor swords.
+fn gear(i: &Value) -> Option<Gear> {
+    let kind = i.get("type").and_then(Value::as_i64).unwrap_or(0);
+    let weapon = flag(i, "isWeapon") && !flag(i, "isTool") && kind != TYPE_SWORD;
+    if !(weapon || kind == TYPE_ARMOR) {
+        return None;
+    }
+    // Damage is a formula: base + perk and potion terms.
+    let damage = i.get("damage").and_then(|d| value(Some(d)).or_else(|| leading_number(d)));
+    let positive = |f: &str| Some(num(i, f)).filter(|&v| v > 0.0);
+    Some(Gear {
+        armor: kind == TYPE_ARMOR,
+        power: num(i, "quality") as u32,
+        damage: if weapon { damage } else { None },
+        range: positive("atkRange").filter(|_| weapon),
+        pause: positive("atkPause").filter(|_| weapon),
+    })
+}
+
+/// `4+3*PPar("buff_damage")` -> 4.
+fn leading_number(d: &Value) -> Option<f64> {
+    let s = text(d, "expressionString");
+    let end = s.find(|c: char| !(c.is_ascii_digit() || c == '.')).unwrap_or(s.len());
+    s[..end].parse().ok()
+}
+
+/// Battles (named, with a power to reach) and the military base's defences:
+/// the objects built from a `<id>_fb` building, worth their quality.
+fn army(b: &Value, names: &mut Names) -> Option<Army> {
+    let fights: Vec<Fight> = list(b, "fightDefinitions")
+        .iter()
+        .filter(|f| num(f, "defencePowerLock") > 0.0)
+        .filter_map(|f| {
+            let id = text(f, "id");
+            Some(Fight {
+                id: id.to_string(),
+                name: Some(names.exact(id)?),
+                power: num(f, "defencePowerLock") as u32,
+                squads: num(f, "squads") as u32,
+                no_towers: flag(f, "isTowersUnavailable"),
+                no_barricades: flag(f, "isBarricadesUnavailable"),
+            })
+        })
+        .collect();
+    let wgos: HashMap<&str, &Value> = list(b, "wgoDefs").iter().map(|w| (text(w, "id"), w)).collect();
+    let defences = list(b, "buildingDefs")
+        .iter()
+        .filter(|d| text(d, "id").ends_with("_fb"))
+        .filter_map(|d| {
+            let w = wgos.get(text(d, "wgoId"))?;
+            Some(Defence {
+                object: text(w, "id").to_string(),
+                power: value(w.get("quality")).unwrap_or(0.0) as u32,
+                group: text(w, "wgoGroup").to_string(),
+            })
+        })
+        .collect();
+    (!fights.is_empty()).then_some(Army { fights, defences })
+}
+
 /// `TalentLevelUpDef`s flagged `isZombiePerk`; perks come from `perkDefs`.
 fn zombie_tree(b: &Value, names: &mut Names) -> Vec<TalentNode> {
     let perks: HashMap<&str, &Value> = list(b, "perkDefs").iter().map(|p| (text(p, "id"), p)).collect();
@@ -422,6 +487,8 @@ pub fn normalize(b: &Value, names: &mut Names) -> Normalized {
             // Only the starting tools can't be destroyed.
             starter: i.get("canNotBeDestroyed").and_then(|v| v.get("pureValueBool")).and_then(Value::as_i64) == Some(1),
         });
+        // Enemies' and test gear have no name.
+        e.gear = gear(i).filter(|_| e.name.is_some());
         items.push(e);
     }
     // Group ids appear as ingredients, so they get names like items.
@@ -464,6 +531,7 @@ pub fn normalize(b: &Value, names: &mut Names) -> Normalized {
         o.work = work.get(o.id.as_str()).cloned();
     }
     let morgue = morgue(b, &recipes);
+    let army = army(b, names);
     let zombie_tree = zombie_tree(b, names);
     // Zombies are named from a pool of texts; the save says which one.
     names.keep_prefixed("zombie_name_");
@@ -485,5 +553,5 @@ pub fn normalize(b: &Value, names: &mut Names) -> Normalized {
         .map(|id| (id, TECH_TABS.get(id as usize).map(|n| format!("tech_tab_{n}")).unwrap_or_default()))
         .collect();
 
-    Normalized { items, objects, groups, recipes, techs, branches, object_icons, alchemy_mixes, zones, storage, morgue, zombie_tree }
+    Normalized { items, objects, groups, recipes, techs, branches, object_icons, alchemy_mixes, zones, storage, morgue, zombie_tree, army }
 }

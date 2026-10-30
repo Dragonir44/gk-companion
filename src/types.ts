@@ -1,7 +1,7 @@
 // Mirrors src-tauri/src/model.rs.
 
 export type GameId = "gk1" | "gk2";
-export type View = "planner" | "research" | "sites" | "stock" | "morgue" | "zombies";
+export type View = "planner" | "research" | "sites" | "stock" | "morgue" | "zombies" | "army";
 export const GAMES: GameId[] = ["gk1", "gk2"];
 
 export interface Entity {
@@ -19,6 +19,42 @@ export interface Entity {
   tool?: Tool;
   /** Work station: the talent its crafts use (gk2). */
   work?: Work;
+  /** Weapon or armour a zombie fighter can wear (gk2). */
+  gear?: Gear;
+}
+
+export interface Gear {
+  armor?: boolean;
+  /** What it adds to its wearer's power. */
+  power: number;
+  /** Weapons: base damage, reach, seconds between attacks. */
+  damage?: number;
+  range?: number;
+  pause?: number;
+}
+
+/** Battles and the military base's defences (gk2). */
+export interface Army {
+  fights: Fight[];
+  defences: Defence[];
+}
+
+export interface Fight {
+  id: string;
+  name?: string;
+  /** Least power to start it. */
+  power: number;
+  /** Squads that can be sent. */
+  squads: number;
+  noTowers?: boolean;
+  noBarricades?: boolean;
+}
+
+export interface Defence {
+  object: string;
+  power: number;
+  /** "towers" or "barricades". */
+  group: string;
 }
 
 export interface Tool {
@@ -154,6 +190,7 @@ export interface GameData {
   morgue?: Morgue;
   /** The zombies' talent tree (gk2), shared by every zombie. */
   zombieTree?: TalentNode[];
+  army?: Army;
 }
 
 export interface WorldMap {
@@ -254,6 +291,8 @@ export interface Progress {
   /** World object instances with their ground position (gk2). */
   objects?: WorldObject[];
   zombies?: Zombie[];
+  /** Defences built at the military base: object ids (gk2). */
+  defences?: string[];
 }
 
 export interface Zombie {
@@ -267,6 +306,10 @@ export interface Zombie {
   items: string[];
   tool?: string;
   collar?: string;
+  weapon?: string;
+  armor?: string;
+  /** Id of the station instance: one barracks slot = one squad. */
+  place?: string;
   /** Talent tree nodes bought. */
   studied: string[];
   /** Points left to spend: r, g, b. */

@@ -21,9 +21,10 @@ fn main() {
         println!("stock {:<28} {:<22} {} items, {} kinds", c.object, c.zone.as_deref().unwrap_or("-"), total, c.items.len());
     }
     for z in &p.zombies {
-        println!("zombie {:<16} {:<14} at {:<26} tool {:?} collar {:?} {} nodes {:?}",
-            z.name, z.object, z.station.as_deref().unwrap_or("-"), z.tool, z.collar, z.studied.len(), z.points);
+        println!("zombie {:<16} {:<14} at {:<26} tool {:?} collar {:?} weapon {:?} armor {:?} {} nodes {:?}",
+            z.name, z.object, z.station.as_deref().unwrap_or("-"), z.tool, z.collar, z.weapon, z.armor, z.studied.len(), z.points);
     }
+    println!("defences: {:?}", p.defences);
     if let Some(out) = args.get(3) {
         let slot = save::list_slots(&[path.parent().unwrap().to_path_buf()]).into_iter().find(|s| s.path == path).unwrap();
         let json = serde_json::json!({ "slot": slot, "progress": p });
