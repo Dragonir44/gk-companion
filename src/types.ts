@@ -1,7 +1,7 @@
 // Mirrors src-tauri/src/model.rs.
 
 export type GameId = "gk1" | "gk2";
-export type View = "planner" | "research" | "sites" | "stock";
+export type View = "planner" | "research" | "sites" | "stock" | "morgue" | "zombies";
 export const GAMES: GameId[] = ["gk1", "gk2"];
 
 export interface Entity {
@@ -12,6 +12,62 @@ export interface Entity {
   icon?: string;
   /** Alchemy runes [red, green, blue] (gk2). */
   runes?: [number, number, number];
+  /** Skulls [red, white] the item brings to a body (gk2). */
+  skulls?: [number, number];
+  /** Zombie collar: most red skulls the zombie keeps. */
+  collar?: number;
+  tool?: Tool;
+  /** Work station: the talent its crafts use (gk2). */
+  work?: Work;
+}
+
+export interface Tool {
+  /** Tool type; a station takes tools of its type (`Work.tool`). */
+  kind: number;
+  /** Talents it adds `bonus` mastery to. */
+  talents: string[];
+  bonus: number;
+}
+
+/** `Work.tool` of stations worked with any tool of their talent. */
+export const ANY_TOOL = 10;
+
+export interface Work {
+  talent: string;
+  tool: number;
+  /** A zombie can be assigned to it. */
+  zombie?: boolean;
+}
+
+/** Body parts by role (gk2); skull counts are on the items. */
+export interface Morgue {
+  /** Organ slots as item groups (gr_skin...). */
+  slots: string[];
+  /** Organs per slot, same order; surgeon mistakes included. */
+  organs: string[][];
+  /** Optional parts (flesh, fat, blood). */
+  extras: string[];
+  embalms: string[];
+  collars: string[];
+}
+
+/** Node of the zombie talent tree; each one takes one red skull. */
+export interface TalentNode {
+  id: string;
+  talent: string;
+  parents: string[];
+  x: number;
+  y: number;
+  cost: Record<string, number>;
+  /** Mastery added to the tree's talent. */
+  mastery?: number;
+  perk?: string;
+  name?: string;
+  desc?: string;
+  icon?: string;
+  /** On crafts listing the perk: extra mastery, work ticks saved. */
+  masteryBonus?: number;
+  speedBonus?: number;
 }
 
 export interface Stack {
@@ -40,6 +96,10 @@ export interface Recipe {
   runes?: [number, number, number];
   /** One-off job on a world object: a construction site (gk2). */
   site?: boolean;
+  /** Mastery needed in the station's talent (gk2). */
+  mastery?: number;
+  /** Perks that help with this craft. */
+  perks?: string[];
 }
 
 /** One valid alchemy mix: one of each item. */
@@ -89,6 +149,9 @@ export interface GameData {
   alchemyMixes?: Record<string, Mix[]>;
   /** The in-game world map (gk2). */
   map?: WorldMap;
+  morgue?: Morgue;
+  /** The zombies' talent tree (gk2), shared by every zombie. */
+  zombieTree?: TalentNode[];
 }
 
 export interface WorldMap {
@@ -188,6 +251,24 @@ export interface Progress {
   inventories?: Container[];
   /** World object instances with their ground position (gk2). */
   objects?: WorldObject[];
+  zombies?: Zombie[];
+}
+
+export interface Zombie {
+  /** Text key of its name. */
+  name: string;
+  object: string;
+  zone?: string;
+  /** World object id of the station it works at. */
+  station?: string;
+  /** Everything in its body: organs, extras, embalming, collar, tools. */
+  items: string[];
+  tool?: string;
+  collar?: string;
+  /** Talent tree nodes bought. */
+  studied: string[];
+  /** Points left to spend: r, g, b. */
+  points: Record<string, number>;
 }
 
 export interface WorldObject {

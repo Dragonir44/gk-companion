@@ -58,6 +58,11 @@ impl Names {
         Some(found)
     }
 
+    /// Keeps every key starting with `prefix`: texts the save refers to.
+    pub fn keep_prefixed(&mut self, prefix: &str) {
+        self.used.extend(self.keys.iter().filter(|k| k.starts_with(prefix)).cloned());
+    }
+
     /// Keep only the keys that were used, for every language.
     pub fn filter_locales(
         &self,

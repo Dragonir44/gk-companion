@@ -61,6 +61,8 @@ pub struct Normalized {
     /// Icon sprite per world object id, when the game names one.
     pub object_icons: HashMap<String, String>,
     pub alchemy_mixes: BTreeMap<String, Vec<crate::model::Mix>>,
+    pub morgue: Option<crate::model::Morgue>,
+    pub zombie_tree: Vec<crate::model::TalentNode>,
 }
 
 /// Extraction result; icons are optional: data stays usable without them.
@@ -228,6 +230,9 @@ pub fn extract(game: GameId, root: &Path, build_id: Option<&str>) -> Result<Extr
         let used = used.chain(n.recipes.iter().filter_map(|r| r.icon.clone()));
         let used = used.chain(n.techs.iter().flat_map(|t| [t.icon.clone(), t.lock.as_ref().and_then(|l| l.portrait.clone())]).flatten());
         let used = used.chain(world_map.iter().map(|m| m.sprite.clone()));
+        let used = used.chain(n.zombie_tree.iter().filter_map(|t| t.icon.clone()));
+        // Talent symbols, drawn by the game in its texts (`<sprite name="talent_red">`).
+        let used = used.chain(n.zombie_tree.iter().map(|t| t.talent.clone()));
         icon_index.sprites = icons::referenced(set, used);
         icon_index.sheet_sizes = set.sheets.iter().map(|s| [s.width, s.height]).collect();
     }
@@ -249,6 +254,8 @@ pub fn extract(game: GameId, root: &Path, build_id: Option<&str>) -> Result<Extr
         icons: icon_index,
         alchemy_mixes: n.alchemy_mixes,
         map: world_map,
+        morgue: n.morgue,
+        zombie_tree: n.zombie_tree,
     };
     Ok(Extracted { data, icons: icon_set, icons_error })
 }
@@ -391,7 +398,18 @@ fn flag(v: &Value, key: &str) -> bool {
 fn entity(names: &mut Names, id: &str) -> Entity {
     let name = names.name(id);
     let desc = name.as_deref().and_then(|k| names.desc(k));
-    Entity { id: id.to_string(), name, desc, heavy: false, icon: None, runes: None }
+    Entity {
+        id: id.to_string(),
+        name,
+        desc,
+        heavy: false,
+        icon: None,
+        runes: None,
+        skulls: None,
+        collar: None,
+        tool: None,
+        work: None,
+    }
 }
 
 /// Recipes often use an item without its quality suffix (`meal:burger`)

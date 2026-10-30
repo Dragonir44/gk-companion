@@ -84,6 +84,8 @@ pub fn normalize(b: &Value, names: &mut Names) -> Normalized {
             needs_unlock: flag(c, "needs_unlock"),
             runes: None,
             site: false,
+            mastery: None,
+            perks: vec![],
         });
     }
 
@@ -107,6 +109,8 @@ pub fn normalize(b: &Value, names: &mut Names) -> Normalized {
             needs_unlock: flag(c, "needs_unlock"),
             runes: None,
             site: false,
+            mastery: None,
+            perks: vec![],
         });
     }
 
@@ -149,5 +153,5 @@ pub fn normalize(b: &Value, names: &mut Names) -> Normalized {
         .map(|id| (id, format!("tbranch_{id}")))
         .collect();
 
-    Normalized { items, objects, groups: BTreeMap::new(), recipes, techs, branches, object_icons: Default::default(), alchemy_mixes: Default::default(), zones: vec![], storage: vec![] }
+    Normalized { items, objects, groups: BTreeMap::new(), recipes, techs, branches, object_icons: Default::default(), alchemy_mixes: Default::default(), zones: vec![], storage: vec![], morgue: None, zombie_tree: vec![] }
 }

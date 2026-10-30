@@ -7,6 +7,9 @@
 pub mod gk1;
 pub mod inventory;
 pub mod odin;
+#[cfg(test)]
+mod testbin;
+pub mod zombies;
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -67,6 +70,8 @@ pub struct Progress {
     pub inventories: Vec<inventory::Container>,
     /// World object instances with their position (gk2).
     pub objects: Vec<inventory::WorldObject>,
+    /// Zombies, with their body and talents (gk2).
+    pub zombies: Vec<zombies::Zombie>,
 }
 
 pub fn supported(game: GameId) -> bool {
@@ -143,7 +148,8 @@ pub fn read_progress(game: GameId, slot: &SaveSlot) -> Result<Progress, SaveErro
         GameId::Gk2 => (knowledge_lists(&bytes)?, Some(inventory::world(&bytes)?)),
     };
     let (inventories, objects) = world.map(|w| (w.containers, w.objects)).unwrap_or_default();
-    Ok(Progress { slot: slot.id.clone(), modified: slot.modified, lists, inventories, objects })
+    let zombies = if game == GameId::Gk2 { zombies::zombies(&bytes)? } else { Vec::new() };
+    Ok(Progress { slot: slot.id.clone(), modified: slot.modified, lists, inventories, objects, zombies })
 }
 
 /// String lists directly under `knowledgeSystem/<field>`.

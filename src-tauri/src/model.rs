@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 /// Bump when the model changes, so stale caches are re-extracted.
-pub const MODEL_VERSION: u32 = 13;
+pub const MODEL_VERSION: u32 = 14;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -57,6 +57,70 @@ pub struct GameData {
     /// The in-game world map (gk2).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub map: Option<WorldMap>,
+    /// What bodies are made of, for skull counts (gk2).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub morgue: Option<Morgue>,
+    /// The zombies' own talent tree (gk2): one tree per talent, shared by
+    /// every zombie.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub zombie_tree: Vec<TalentNode>,
+}
+
+/// Body parts by role. Skull counts are on the items (`Entity::skulls`).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Morgue {
+    /// Organ slots, as item groups (`gr_skin`...), one organ each.
+    pub slots: Vec<String>,
+    /// Organs per slot, same order as `slots`.
+    pub organs: Vec<Vec<String>>,
+    /// Optional parts a body may carry (flesh, fat, blood).
+    pub extras: Vec<String>,
+    /// Embalming fluids, applied at the embalming table.
+    pub embalms: Vec<String>,
+    /// Zombie collars (`Entity::collar`).
+    pub collars: Vec<String>,
+}
+
+/// A node of the zombie talent tree.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TalentNode {
+    pub id: String,
+    /// Talent (`talent_orange`...) whose tree holds the node.
+    pub talent: String,
+    pub parents: Vec<String>,
+    pub x: f64,
+    pub y: f64,
+    /// Points the zombie spends, keyed r, g, b. Each node also takes one
+    /// of the zombie's red skulls.
+    pub cost: BTreeMap<String, f64>,
+    /// Mastery added to the tree's talent.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub mastery: u32,
+    /// Perk granted (its name and description name the node).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub perk: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub desc: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
+    /// Perk effects on the crafts that list the perk (`Recipe::perks`):
+    /// extra mastery, and work ticks it saves on each craft.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub mastery_bonus: u32,
+    #[serde(default, skip_serializing_if = "is_zero_i")]
+    pub speed_bonus: i32,
+}
+
+fn is_zero(v: &u32) -> bool {
+    *v == 0
+}
+
+fn is_zero_i(v: &i32) -> bool {
+    *v == 0
 }
 
 /// The world map: an image and where the world falls on it.
@@ -114,7 +178,44 @@ pub struct Entity {
     /// Alchemy runes `[red, green, blue]` the item brings to a mix (gk2).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub runes: Option<[u32; 3]>,
+    /// Skulls `[red, white]` the item brings to a body (gk2 organs,
+    /// embalming fluids).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub skulls: Option<[i32; 2]>,
+    /// Zombie collar: most red skulls the zombie keeps.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub collar: Option<u32>,
+    /// Tool: the mastery it gives a worker.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool: Option<Tool>,
+    /// Work station: the talent its crafts use (gk2).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub work: Option<Work>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Tool {
+    /// Tool type; a station takes tools of its type (`Work::tool`).
+    pub kind: i64,
+    /// Talents it adds `bonus` mastery to.
+    pub talents: Vec<String>,
+    pub bonus: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Work {
+    pub talent: String,
+    /// Tool type used here; `ANY_TOOL` takes any tool of the talent.
+    pub tool: i64,
+    /// A zombie can be assigned to it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub zombie: bool,
+}
+
+/// `Work::tool` of stations worked with whatever tool matches the talent.
+pub const ANY_TOOL: i64 = 10;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -159,6 +260,12 @@ pub struct Recipe {
     /// a town plot): listed as a construction site (gk2).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub site: bool,
+    /// Mastery needed in the station's talent (gk2).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mastery: Option<u32>,
+    /// Perks that help with this craft (player and zombie perks).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub perks: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -251,6 +358,8 @@ mod tests {
             needs_unlock: false,
             runes: None,
             site: false,
+            mastery: None,
+            perks: vec![],
         };
         let tech = Tech {
             id: "t".into(),
@@ -272,7 +381,18 @@ mod tests {
             fingerprint: "fp".into(),
             game_build: None,
             unity_version: "6000".into(),
-            items: vec![Entity { id: "nails".into(), name: None, desc: None, heavy: false, icon: None, runes: None }],
+            items: vec![Entity {
+                id: "nails".into(),
+                name: None,
+                desc: None,
+                heavy: false,
+                icon: None,
+                runes: None,
+                skulls: None,
+                collar: None,
+                tool: None,
+                work: None,
+            }],
             objects: vec![],
             groups: BTreeMap::new(),
             recipes: vec![recipe],
@@ -288,6 +408,22 @@ mod tests {
                 world_max: [193.0, 156.0],
                 zones: BTreeMap::from([("home".into(), [0.25, 0.4])]),
             }),
+            morgue: None,
+            zombie_tree: vec![TalentNode {
+                id: "z".into(),
+                talent: "talent_orange".into(),
+                parents: vec![],
+                x: 0.0,
+                y: 0.0,
+                cost: BTreeMap::new(),
+                mastery: 0,
+                perk: None,
+                name: None,
+                desc: None,
+                icon: None,
+                mastery_bonus: 0,
+                speed_bonus: 0,
+            }],
         };
         let json = serde_json::to_string(&data).unwrap();
         assert!(!json.contains("\"points\""), "empty fields are omitted");

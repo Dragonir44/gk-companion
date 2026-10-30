@@ -177,42 +177,9 @@ pub fn world(bytes: &[u8]) -> Result<World, SaveError> {
 
 #[cfg(test)]
 mod tests {
+    use super::super::testbin::*;
     use super::*;
 
-    fn s8(s: &str) -> Vec<u8> {
-        let mut v = vec![0u8];
-        v.extend((s.len() as i32).to_le_bytes());
-        v.extend(s.as_bytes());
-        v
-    }
-    /// Named struct start (0x03) with no type (0x2E).
-    fn start(b: &mut Vec<u8>, name: Option<&str>) {
-        match name {
-            Some(n) => {
-                b.push(0x03);
-                b.extend(s8(n));
-            }
-            None => b.push(0x04),
-        }
-        b.push(0x2E);
-    }
-    fn arr(b: &mut Vec<u8>) {
-        b.push(0x06);
-        b.extend(0i64.to_le_bytes());
-    }
-    fn str_field(b: &mut Vec<u8>, name: &str, v: &str) {
-        b.push(0x27);
-        b.extend(s8(name));
-        b.extend(s8(v));
-    }
-    fn item(b: &mut Vec<u8>, id: &str, count: i32) {
-        start(b, None);
-        str_field(b, "id", id);
-        b.push(0x17);
-        b.extend(s8("count"));
-        b.extend(count.to_le_bytes());
-        b.push(0x05);
-    }
     /// `<name>: { inventoryItem: { inventory: [items] } }`
     fn inventory(b: &mut Vec<u8>, name: &str, items: &[(&str, i32)]) {
         start(b, Some(name));

@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, HashMap};
 use serde_json::Value;
 
 use super::{entity, expr, item_entity, flag, list, num, referenced_objects, text, Names, Normalized};
-use crate::model::{Entity, Mix, Recipe, RecipeKind, ReputationLock, Stack, Tech};
+use crate::model::{Entity, Mix, Morgue, Recipe, RecipeKind, ReputationLock, Stack, TalentNode, Tech, Tool, Work};
 
 /// `BuildingDef.buildingMode` for removal entries (`*_r`), not constructions.
 const BUILDING_MODE_REMOVE: i64 = 2;
@@ -100,6 +100,8 @@ fn alchemy(b: &Value) -> (Vec<Recipe>, BTreeMap<String, Vec<Mix>>) {
                 needs_unlock: true,
                 runes: Some(runes(f)),
                 site: false,
+                mastery: None,
+                perks: vec![],
             }
         })
         .collect();
@@ -151,6 +153,8 @@ fn town_buildings(b: &Value, names: &mut Names) -> Vec<Recipe> {
                 needs_unlock: flag(t, "isNeedsUnlock"),
                 runes: None,
                 site: on_plot && !previous.contains_key(id),
+                mastery: None,
+                perks: vec![],
             }
         })
         .collect()
@@ -192,6 +196,97 @@ fn points(c: &Value) -> BTreeMap<String, f64> {
         .collect()
 }
 
+/// `redSkullsMaxCollar` of items that are not collars (C# `int.MinValue`).
+const NO_COLLAR: i64 = i32::MIN as i64;
+const MISTAKE_PREFIX: &str = "surgeon_mistake_";
+const UI_TEXTS: [&str; 5] = ["ui_skulls_red", "ui_skulls_white", "zombie_collar", "ui_mastery", "ui_embalming_effect"];
+
+/// Organ slots in body order (`BodyDef.parts`: skin, bones, skull...), the
+/// optional parts, embalming fluids and collars. Surgeon mistakes (left in
+/// a slot when an extraction fails) are listed with their slot's organs.
+fn morgue(b: &Value, recipes: &[Recipe]) -> Option<Morgue> {
+    let items = list(b, "itemDefs");
+    let groups = |i: &Value| super::strings(i, &["itemGroupIds"]);
+    let is_part = |i: &Value| groups(i).iter().any(|g| g == "bodypart");
+    let slot_of = |i: &Value| groups(i).into_iter().find(|g| g.starts_with("gr_"));
+    let mut slots: Vec<String> = Vec::new();
+    let mut organs: Vec<Vec<String>> = Vec::new();
+    let mut extras = Vec::new();
+    for i in items.iter().filter(|i| is_part(i) && !flag(i, "isOrganMistake")) {
+        let (id, slot) = (text(i, "id").to_string(), slot_of(i));
+        match slot.filter(|_| flag(i, "isMainOrgan")) {
+            Some(slot) => match slots.iter().position(|s| *s == slot) {
+                Some(k) => organs[k].push(id),
+                None => {
+                    slots.push(slot);
+                    organs.push(vec![id]);
+                }
+            },
+            None => extras.push(id),
+        }
+    }
+    if slots.is_empty() {
+        return None;
+    }
+    // `surgeon_mistake_skull` goes in `gr_skulls`, `_skin` in `gr_skin`.
+    for i in items.iter().filter(|i| flag(i, "isOrganMistake")) {
+        let id = text(i, "id");
+        let part = id.trim_start_matches(MISTAKE_PREFIX);
+        match slots.iter().position(|s| s == &format!("gr_{part}") || s == &format!("gr_{part}s")) {
+            Some(k) => organs[k].push(id.to_string()),
+            None => extras.push(id.to_string()),
+        }
+    }
+    let embalms = recipes
+        .iter()
+        .filter(|r| r.stations.iter().any(|s| s.starts_with("embalm_table")))
+        .filter_map(|r| list(b, "craftDefs").iter().find(|c| text(c, "id") == r.id))
+        .map(|c| text(c, "autopsyItemId").to_string())
+        .filter(|id| !id.is_empty())
+        .collect();
+    let collars = items
+        .iter()
+        .filter(|i| num(i, "redSkullsMaxCollar") as i64 != NO_COLLAR)
+        .map(|i| text(i, "id").to_string())
+        .collect();
+    Some(Morgue { slots, organs, extras, embalms, collars })
+}
+
+/// `TalentLevelUpDef`s flagged `isZombiePerk`; perks come from `perkDefs`.
+fn zombie_tree(b: &Value, names: &mut Names) -> Vec<TalentNode> {
+    let perks: HashMap<&str, &Value> = list(b, "perkDefs").iter().map(|p| (text(p, "id"), p)).collect();
+    list(b, "talentLevelUpDefs")
+        .iter()
+        .filter(|t| flag(t, "isZombiePerk"))
+        .map(|t| {
+            let perk = super::opt_text(t, "linkedPerk");
+            let def = perk.as_deref().and_then(|p| perks.get(p));
+            let named = perk.as_deref().map(|p| entity(names, p));
+            let cost = [("r", "techRed"), ("g", "techGreen"), ("b", "techBlue")]
+                .into_iter()
+                .map(|(k, f)| (k.to_string(), num(t, f)))
+                .filter(|(_, v)| *v != 0.0)
+                .collect();
+            TalentNode {
+                id: text(t, "id").to_string(),
+                talent: text(t, "talentId").to_string(),
+                parents: super::strings(t, &["parents"]),
+                x: num(t, "posX"),
+                y: num(t, "posY"),
+                cost,
+                mastery: num(t, "talentValueAdd") as u32,
+                name: named.as_ref().and_then(|e| e.name.clone()),
+                desc: named.and_then(|e| e.desc),
+                icon: super::opt_text(t, "icon"),
+                mastery_bonus: def.map_or(0, |p| num(p, "craftMasteryBonus") as u32),
+                // Both make the craft faster: fewer ticks to do, or a head start.
+                speed_bonus: def.map_or(0, |p| (num(p, "craftStartTicks") - num(p, "craftTotalProgressTicksBonus")) as i32),
+                perk,
+            }
+        })
+        .collect()
+}
+
 pub fn normalize(b: &Value, names: &mut Names) -> Normalized {
     let mut recipes = Vec::new();
 
@@ -213,6 +308,8 @@ pub fn normalize(b: &Value, names: &mut Names) -> Normalized {
             needs_unlock: flag(c, "isNeedsUnlock"),
             runes: None,
             site: is_site(c),
+            mastery: Some(num(c, "talentLock") as u32).filter(|&m| m > 0),
+            perks: super::strings(c, &["linkedPerks"]),
         });
     }
 
@@ -237,6 +334,8 @@ pub fn normalize(b: &Value, names: &mut Names) -> Normalized {
             needs_unlock: flag(c, "isNeedsUnlock"),
             runes: None,
             site: false,
+            mastery: None,
+            perks: vec![],
         });
     }
 
@@ -307,6 +406,14 @@ pub fn normalize(b: &Value, names: &mut Names) -> Normalized {
         }
         let mut e = item_entity(names, i, "itemSize", "iconId");
         e.runes = Some(runes(i)).filter(|r| r.iter().any(|&n| n > 0));
+        e.skulls = Some([num(i, "redSkulls") as i32, num(i, "whiteSkulls") as i32]).filter(|s| s != &[0, 0]);
+        e.collar = Some(num(i, "redSkullsMaxCollar") as i64).filter(|&m| m != NO_COLLAR).map(|m| m as u32);
+        let talents = super::strings(i, &["talentIds"]);
+        e.tool = (flag(i, "isTool") && !talents.is_empty()).then(|| Tool {
+            kind: i.get("type").and_then(Value::as_i64).unwrap_or(0),
+            talents,
+            bonus: num(i, "talentBonus") as u32,
+        });
         items.push(e);
     }
     // Group ids appear as ingredients, so they get names like items.
@@ -331,7 +438,26 @@ pub fn normalize(b: &Value, names: &mut Names) -> Normalized {
         .filter(|id| crate::save::inventory::is_storage(id))
         .map(str::to_string)
         .collect();
-    let objects = referenced_objects(&recipes, &storage, names);
+    let mut objects = referenced_objects(&recipes, &storage, names);
+    let work: HashMap<&str, Work> = list(b, "wgoDefs")
+        .iter()
+        .filter(|w| !text(w, "talent").is_empty())
+        .map(|w| {
+            let tool = w.get("toolAction").and_then(|t| t.get("actionableTool")).and_then(Value::as_i64).unwrap_or(0);
+            (text(w, "id"), Work { talent: text(w, "talent").to_string(), tool, zombie: flag(w, "canInsertZombie") })
+        })
+        .collect();
+    for o in &mut objects {
+        o.work = work.get(o.id.as_str()).cloned();
+    }
+    let morgue = morgue(b, &recipes);
+    let zombie_tree = zombie_tree(b, names);
+    // Zombies are named from a pool of texts; the save says which one.
+    names.keep_prefixed("zombie_name_");
+    // The game's own labels for the morgue and zombie views.
+    for key in UI_TEXTS {
+        names.exact(key);
+    }
 
     let object_icons = list(b, "wgoDefs")
         .iter()
@@ -346,5 +472,5 @@ pub fn normalize(b: &Value, names: &mut Names) -> Normalized {
         .map(|id| (id, TECH_TABS.get(id as usize).map(|n| format!("tech_tab_{n}")).unwrap_or_default()))
         .collect();
 
-    Normalized { items, objects, groups, recipes, techs, branches, object_icons, alchemy_mixes, zones, storage }
+    Normalized { items, objects, groups, recipes, techs, branches, object_icons, alchemy_mixes, zones, storage, morgue, zombie_tree }
 }
