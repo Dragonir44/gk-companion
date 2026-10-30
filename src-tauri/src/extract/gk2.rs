@@ -289,6 +289,18 @@ fn leading_number(d: &Value) -> Option<f64> {
     s[..end].parse().ok()
 }
 
+/// Every string in a JSON tree.
+fn collect_strings<'a>(v: &'a [Value], out: &mut Vec<&'a str>) {
+    for x in v {
+        match x {
+            Value::String(s) => out.push(s),
+            Value::Array(a) => collect_strings(a, out),
+            Value::Object(o) => o.values().for_each(|y| collect_strings(std::slice::from_ref(y), out)),
+            _ => {}
+        }
+    }
+}
+
 /// `QuestCheck.triggerType` of "this battle was won".
 const TRIGGER_FIGHT_WON: i64 = 39;
 
@@ -319,9 +331,18 @@ fn army(b: &Value, names: &mut Names) -> Option<Army> {
         }
         quests
     };
+    // Battles no quest spawns nor checks are left over from development
+    // (`sewer_fight_1`): the game never offers them.
+    let mut quest_texts = Vec::new();
+    collect_strings(list(b, "questDefs"), &mut quest_texts);
+    let in_quests = |id: &str| {
+        quest_texts.iter().any(|t| {
+            t.match_indices(id).any(|(i, _)| !t[i + id.len()..].starts_with(|c: char| c.is_ascii_alphanumeric() || c == '_'))
+        })
+    };
     let fights: Vec<Fight> = list(b, "fightDefinitions")
         .iter()
-        .filter(|f| num(f, "defencePowerLock") > 0.0)
+        .filter(|f| num(f, "defencePowerLock") > 0.0 && in_quests(text(f, "id")))
         .filter_map(|f| {
             let id = text(f, "id");
             Some(Fight {
