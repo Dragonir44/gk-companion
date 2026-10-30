@@ -27,6 +27,8 @@ export interface Tool {
   /** Talents it adds `bonus` mastery to. */
   talents: string[];
   bonus: number;
+  /** The player's starting (rusty) tools: zombies can't hold them. */
+  starter?: boolean;
 }
 
 /** `Work.tool` of stations worked with any tool of their talent. */

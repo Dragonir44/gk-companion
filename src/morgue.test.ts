@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bestBody, bodyFromItems, MAX_EMBALMS, totals } from "./morgue";
+import { bestBody, bodyFromItems, totals } from "./morgue";
 import type { Entity, GameData } from "./types";
 
 const item = (id: string, skulls: [number, number], extra: Partial<Entity> = {}): Entity => ({ id, skulls, ...extra });
@@ -20,8 +20,10 @@ const data: GameData = {
     item("surgeon_mistake_heart", [-1, -1]),
     item("fat", [1, 0]),
     item("embalm_red", [1, 0]),
+    item("embalm_white:1", [0, 1]),
+    item("flesh", [0, 1]),
     item("embalm_red_white", [1, -1]),
-    item("embalm_white", [0, 1]),
+    item("embalm_white", [0, 2]),
     { id: "collar_bronze", collar: 5 },
   ],
   objects: [],
@@ -37,8 +39,8 @@ const data: GameData = {
       ["skin_0_0", "skin_3_0", "skin_1_3"],
       ["heart_0_1", "heart_2_2", "heart_2_0", "surgeon_mistake_heart"],
     ],
-    extras: ["fat"],
-    embalms: ["embalm_red", "embalm_red_white", "embalm_white"],
+    extras: ["fat", "flesh"],
+    embalms: ["embalm_red", "embalm_red_white", "embalm_white", "embalm_white:1"],
     collars: ["collar_bronze"],
   },
 };
@@ -51,13 +53,23 @@ describe("morgue", () => {
     expect(totals(data, body)).toEqual({ red: 0, white: -1, redKept: 0, cap: 5 });
   });
 
-  it("goes for white: best white organs, red parts out, white fluid", () => {
+  it("goes for white: best white organs, one of each fluid at its best", () => {
     const p = bestBody(data, { ...body, collar: undefined }, "white");
     expect(p.body.organs).toEqual(["skin_1_3", "heart_2_2"]);
     // Fat takes no white away: left alone.
     expect(p.body.extras).toEqual(["fat"]);
-    expect(p.body.embalms).toEqual(Array(MAX_EMBALMS).fill("embalm_white"));
-    expect(p.after.white).toBe(5 + MAX_EMBALMS);
+    // embalm_white:1 is the same fluid, lower quality: not added.
+    expect(p.body.embalms).toEqual(["embalm_white"]);
+    expect(p.after.white).toBe(5 + 2);
+  });
+
+  it("makes room for a fluid by taking out an extra worth less", () => {
+    const full = { ...body, collar: undefined, extras: ["fat", "fat", "fat", "flesh", "flesh", "flesh"] };
+    const p = bestBody(data, full, "white");
+    expect(p.steps.filter((s) => s.kind !== "swap" && s.kind !== "insert")).toEqual([
+      { kind: "remove", item: "fat", recipe: undefined },
+      { kind: "embalm", item: "embalm_white", recipe: undefined },
+    ]);
   });
 
   it("goes for red, prefers organs without white, stops at the collar", () => {
@@ -87,10 +99,10 @@ describe("morgue", () => {
   it("only uses what is in stock", () => {
     const p = bestBody(data, { ...body, collar: undefined }, "red", { heart_2_2: 1, embalm_red_white: 2 });
     expect(p.body.organs).toEqual(["skin_0_0", "heart_2_2"]);
-    expect(p.used).toEqual({ heart_2_2: 1, embalm_red_white: 2 });
+    expect(p.used).toEqual({ heart_2_2: 1, embalm_red_white: 1 });
     expect(p.steps).toEqual([
       { kind: "swap", slot: 1, from: "surgeon_mistake_heart", item: "heart_2_2", recipe: undefined },
-      { kind: "embalm", item: "embalm_red_white", count: 2, recipe: undefined },
+      { kind: "embalm", item: "embalm_red_white", recipe: undefined },
     ]);
   });
 });

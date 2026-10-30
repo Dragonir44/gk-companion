@@ -2,9 +2,13 @@
 //!
 //! A zombie is a world object (`wgoDataList/*`) with a `zombieItem`: the
 //! body, whose `inventory` holds its organs, collar and tools. `equipped*`
-//! fields point at those items by `uniqueId`, `attachedWgoDataUniqueId` at
-//! the station it works at. `talentData/*/studiedLevelUps` lists the tree
-//! nodes bought; `techRed/Green/Blue` are the points left to spend.
+//! fields point at those items by `uniqueId`. `talentData/*/studiedLevelUps`
+//! lists the tree nodes bought; `techRed/Green/Blue` are the points left.
+//!
+//! Where it works is told three ways: its `attachedWgoDataUniqueId` (the
+//! station's `uniqueId`), or the place pointing at its body's `uniqueId`,
+//! as `workerId` (stations) or a dock point's `occupiedBy` (the factory
+//! carousel, the barracks).
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -49,6 +53,10 @@ struct Wgo {
     zone: Option<String>,
     name: Option<String>,
     zombie: bool,
+    /// `uniqueId` of its body (`zombieItem`).
+    body: Option<String>,
+    /// Bodies it holds as worker or on its dock points.
+    holds: Vec<String>,
     /// Body items: (id, uniqueId).
     items: Vec<(String, Option<String>)>,
     item: (Option<String>, Option<String>),
@@ -66,6 +74,8 @@ pub fn zombies(bytes: &[u8]) -> Result<Vec<Zombie>, SaveError> {
     let mut wgo: Option<Wgo> = None;
     let mut found: Vec<Wgo> = Vec::new();
     let mut objects: HashMap<String, String> = HashMap::new();
+    // Body `uniqueId` -> id of the place holding it.
+    let mut held: HashMap<String, String> = HashMap::new();
     loop {
         let entry = r.next_entry()?;
         // Path below the object's node (owned: the stack changes below).
@@ -89,6 +99,10 @@ pub fn zombies(bytes: &[u8]) -> Result<Vec<Zombie>, SaveError> {
                     ([], Some("name")) => w.name = Some(value.clone()),
                     (["uniqueId"], Some("id")) => w.guid = guid(),
                     (["attachedWgoDataUniqueId"], Some("id")) => w.attached = guid(),
+                    (["zombieItem", "uniqueId"], Some("id")) => w.body = guid(),
+                    (["workerId"], Some("id")) | (["mainWgoPartData", "dockPointDataList", ARRAY, "", "occupiedBy"], Some("id")) => {
+                        w.holds.extend(guid())
+                    }
                     (["equippedHand"], Some("id")) => w.hand = guid(),
                     (["equippedCollar"], Some("id")) => w.collar = guid(),
                     (["zombieItem", "inventory", ARRAY, ""], Some("id")) => w.item.0 = Some(value.clone()),
@@ -123,6 +137,9 @@ pub fn zombies(bytes: &[u8]) -> Result<Vec<Zombie>, SaveError> {
                     if let Some(g) = &w.guid {
                         objects.insert(g.clone(), w.id.clone());
                     }
+                    for body in &w.holds {
+                        held.insert(body.clone(), w.id.clone());
+                    }
                     if w.zombie {
                         found.push(w);
                     }
@@ -139,7 +156,12 @@ pub fn zombies(bytes: &[u8]) -> Result<Vec<Zombie>, SaveError> {
         .into_iter()
         .map(|w| Zombie {
             name: w.name.clone().unwrap_or_default(),
-            station: w.attached.as_ref().and_then(|g| objects.get(g).cloned()),
+            station: w
+                .attached
+                .as_ref()
+                .and_then(|g| objects.get(g))
+                .or_else(|| w.body.as_ref().and_then(|b| held.get(b)))
+                .cloned(),
             tool: equipped(&w.items, &w.hand),
             collar: equipped(&w.items, &w.collar),
             items: w.items.into_iter().map(|(id, _)| id).collect(),
@@ -204,11 +226,31 @@ mod tests {
         b.extend([0x07, 0x05, 0x05, 0x07, 0x05]);
         int_field(&mut b, "techRed", 120);
         b.push(0x05);
+
+        // A zombie with no station of its own, on the carousel's dock point.
+        start(&mut b, None);
+        str_field(&mut b, "id", "zombie");
+        str_field(&mut b, "name", "zombie_name_4");
+        start(&mut b, Some("zombieItem"));
+        str_field(&mut b, "id", "body_zombie");
+        guid(&mut b, "uniqueId", "body-4");
+        b.push(0x05);
+        b.push(0x05);
+        start(&mut b, None);
+        str_field(&mut b, "id", "zombie_carousel");
+        start(&mut b, Some("mainWgoPartData"));
+        start(&mut b, Some("dockPointDataList"));
+        arr(&mut b);
+        start(&mut b, None);
+        guid(&mut b, "occupiedBy", "body-4");
+        b.extend([0x05, 0x07, 0x05, 0x05, 0x05]);
         b.extend([0x07, 0x05, 0x05]);
 
+        let got = zombies(&b).unwrap();
+        assert_eq!(got[1].station.as_deref(), Some("zombie_carousel"));
         assert_eq!(
-            zombies(&b).unwrap(),
-            vec![Zombie {
+            got[..1],
+            [Zombie {
                 name: "zombie_name_3".into(),
                 object: "zombie_worker".into(),
                 zone: Some("yard".into()),

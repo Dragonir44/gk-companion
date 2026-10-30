@@ -413,6 +413,8 @@ pub fn normalize(b: &Value, names: &mut Names) -> Normalized {
             kind: i.get("type").and_then(Value::as_i64).unwrap_or(0),
             talents,
             bonus: num(i, "talentBonus") as u32,
+            // Only the starting tools can't be destroyed.
+            starter: i.get("canNotBeDestroyed").and_then(|v| v.get("pureValueBool")).and_then(Value::as_i64) == Some(1),
         });
         items.push(e);
     }
@@ -438,7 +440,12 @@ pub fn normalize(b: &Value, names: &mut Names) -> Normalized {
         .filter(|id| crate::save::inventory::is_storage(id))
         .map(str::to_string)
         .collect();
-    let mut objects = referenced_objects(&recipes, &storage, names);
+    // Where zombies can be: stock lists and zombie views name them.
+    let mut extra = storage.clone();
+    extra.extend(list(b, "wgoDefs").iter().filter(|w| flag(w, "canInsertZombie")).map(|w| text(w, "id").to_string()));
+    // The barracks' zombie slots have no name of their own.
+    names.add_alias("fighter_container", "wz_town_guard_barracks");
+    let mut objects = referenced_objects(&recipes, &extra, names);
     let work: HashMap<&str, Work> = list(b, "wgoDefs")
         .iter()
         .filter(|w| !text(w, "talent").is_empty())

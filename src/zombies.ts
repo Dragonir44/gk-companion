@@ -42,9 +42,11 @@ export function fits(tool: Entity | undefined, station: Entity): boolean {
   return tool.tool.talents.includes(w.talent) && (w.tool === ANY_TOOL || tool.tool.kind === w.tool);
 }
 
-/** Tools that work at the station, best first. */
+/** Tools a zombie can hold that work at the station, best first. */
 export function toolsFor(data: GameData, station: Entity): Entity[] {
-  return data.items.filter((i) => i.tool?.bonus && fits(i, station)).sort((a, b) => b.tool!.bonus - a.tool!.bonus);
+  return data.items
+    .filter((i) => i.tool?.bonus && !i.tool.starter && fits(i, station))
+    .sort((a, b) => b.tool!.bonus - a.tool!.bonus);
 }
 
 /** Mastery for `craft` with these nodes and tool bonus. */

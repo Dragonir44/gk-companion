@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 
 import { fmt, type Strings } from "../i18n";
-import { bestBody, bodyFromItems, emptyBody, MAX_EMBALMS, type Body, type Step, type Totals } from "../morgue";
+import { bestBody, bodyFromItems, emptyBody, fluidOf, OTHER_SLOTS, type Body, type Step, type Totals } from "../morgue";
 import { useStore } from "../store";
 import type { Recipe } from "../types";
 import { fmtNum, useGame } from "./ctx";
@@ -53,7 +53,7 @@ export function MorgueView() {
     const [r, w] = items.get(id)?.skulls ?? [0, 0];
     return `${n.name(id)} (${r} / ${w})`;
   };
-  const free = m.extras.filter((id) => !body.extras.includes(id));
+  const used = body.extras.length + body.embalms.length;
 
   return (
     <section className="bench">
@@ -107,38 +107,38 @@ export function MorgueView() {
           ))}
         </div>
 
-        <h3>{t.morgueExtras}</h3>
+        <h3>
+          {t.morgueExtras} <span className="muted small">{fmt(t.embalmsCount, { n: used, max: OTHER_SLOTS })}</span>
+        </h3>
+        <p className="muted small">{fmt(t.embalmsHint, { max: OTHER_SLOTS })}</p>
         <p className="chips">
           {body.extras.map((id, k) => (
-            <button key={k} className="chip on" onClick={() => setBody({ ...body, extras: body.extras.filter((_, j) => j !== k) })}>
+            <button key={`x${k}`} className="chip on" onClick={() => setBody({ ...body, extras: body.extras.filter((_, j) => j !== k) })}>
               {label(id)} ×
             </button>
           ))}
-          {free.map((id) => (
-            <button key={id} className="chip" onClick={() => setBody({ ...body, extras: [...body.extras, id] })}>
-              + {label(id)}
-            </button>
-          ))}
-        </p>
-
-        <h3 title={fmt(t.embalmsHint, { max: MAX_EMBALMS })}>
-          {t.morgueEmbalms} <span className="muted small">{fmt(t.embalmsCount, { n: body.embalms.length, max: MAX_EMBALMS })}</span>
-        </h3>
-        <p className="chips">
           {body.embalms.map((id, k) => (
-            <button key={k} className="chip on" onClick={() => setBody({ ...body, embalms: body.embalms.filter((_, j) => j !== k) })}>
+            <button key={`e${k}`} className="chip on" onClick={() => setBody({ ...body, embalms: body.embalms.filter((_, j) => j !== k) })}>
               {label(id)} ×
             </button>
           ))}
+          {used < OTHER_SLOTS &&
+            m.extras.map((id) => (
+              <button key={id} className="chip" onClick={() => setBody({ ...body, extras: [...body.extras, id] })}>
+                + {label(id)}
+              </button>
+            ))}
         </p>
-        {body.embalms.length < MAX_EMBALMS && (
+        {used < OTHER_SLOTS && (
           <select value="" onChange={(e) => e.target.value && setBody({ ...body, embalms: [...body.embalms, e.target.value] })}>
             <option value="">{t.morgueAddEmbalm}</option>
-            {m.embalms.map((id) => (
-              <option key={id} value={id}>
-                {label(id)}
-              </option>
-            ))}
+            {m.embalms
+              .filter((id) => !body.embalms.some((e) => fluidOf(e) === fluidOf(id)))
+              .map((id) => (
+                <option key={id} value={id}>
+                  {label(id)}
+                </option>
+              ))}
           </select>
         )}
 
@@ -198,7 +198,6 @@ export function MorgueView() {
             ))}
           </ol>
         )}
-        {plan.steps.some((s) => s.kind === "embalm") && <p className="muted small">{fmt(t.embalmsHint, { max: MAX_EMBALMS })}</p>}
       </div>
     </section>
   );
@@ -213,7 +212,7 @@ function stepText(t: Strings, name: (id: string) => string, s: Step): string {
     case "remove":
       return fmt(t.stepRemove, { item: name(s.item) });
     case "embalm":
-      return fmt(t.stepEmbalm, { item: name(s.item), n: s.count });
+      return fmt(t.stepEmbalm, { item: name(s.item) });
   }
 }
 

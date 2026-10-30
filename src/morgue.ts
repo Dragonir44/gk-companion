@@ -6,8 +6,15 @@ import type { Entity, GameData, Recipe } from "./types";
 
 export type Goal = "red" | "white";
 
-/** Embalming procedures a body takes. Stated by player guides; not found in the game data. */
-export const MAX_EMBALMS = 6;
+/**
+ * Slots for a body's other parts: flesh, fat and blood (which can only be
+ * taken out) share them with embalming fluids, one of each fluid. Not in
+ * the game data: from player guides, confirmed in game.
+ */
+export const OTHER_SLOTS = 6;
+
+/** A fluid whatever its quality (`embalm_red:2` -> `embalm_red`). */
+export const fluidOf = (id: string) => id.split(":")[0];
 
 export interface Body {
   /** Organ per slot (`Morgue.slots` order); null for an empty slot. */
@@ -30,7 +37,7 @@ export type Step =
   | { kind: "insert"; slot: number; item: string; recipe?: Recipe }
   | { kind: "swap"; slot: number; from: string; item: string; recipe?: Recipe }
   | { kind: "remove"; slot?: number; item: string; recipe?: Recipe }
-  | { kind: "embalm"; item: string; count: number; recipe?: Recipe };
+  | { kind: "embalm"; item: string; recipe?: Recipe };
 
 export interface MorguePlan {
   before: Totals;
@@ -84,7 +91,8 @@ export function totals(data: GameData, body: Body): Totals {
  * The best body for the goal. Only changes that add skulls of the goal's
  * colour are made: per slot, the organ with the most (ties: fewest of the
  * other colour, kept for other bodies), extras that take some away
- * removed, free embalming slots filled. For red, a collar caps what counts:
+ * removed, then fluids not yet used, in free slots or in place of an extra
+ * worth less. For red, a collar caps what counts:
  * changes stop once it is reached, using the fewest and smallest ones.
  * `have` limits organs and fluids to a stock; without it everything is
  * available.
@@ -151,15 +159,21 @@ export function bestBody(data: GameData, body: Body, goal: Goal, have?: Record<s
     }
   }
 
-  const fluids = m.embalms.filter((id) => value(id)[0] > 0).sort((a, b) => cmp(b, a));
+  // Best quality of each fluid first; one of each fluid per body.
+  const fluids = m.embalms.filter((id) => value(id)[0] > 0 && left(id) >= 1).sort((a, b) => cmp(b, a));
   for (const id of fluids) {
-    let n = 0;
-    while (next.embalms.length < MAX_EMBALMS && left(id) >= 1 && short() > 0) {
-      next.embalms.push(id);
-      take(id);
-      n++;
+    if (short() <= 0) break;
+    if (next.embalms.some((e) => fluidOf(e) === fluidOf(id))) continue;
+    if (next.extras.length + next.embalms.length >= OTHER_SLOTS) {
+      // Full: make room by taking out the extra worth least, if less than the fluid.
+      const worst = next.extras.reduce<string | undefined>((w, e) => (w === undefined || cmp(e, w) < 0 ? e : w), undefined);
+      if (worst === undefined || cmp(worst, id) >= 0) continue;
+      next.extras.splice(next.extras.indexOf(worst), 1);
+      steps.push({ kind: "remove", item: worst, recipe: recipes.get(`extract_${worst}`) });
     }
-    if (n) steps.push({ kind: "embalm", item: id, count: n, recipe: recipes.get(`embalm_${id}`) });
+    next.embalms.push(id);
+    take(id);
+    steps.push({ kind: "embalm", item: id, recipe: recipes.get(`embalm_${id}`) });
   }
   return { before, after: totals(data, next), body: next, steps, used };
 }

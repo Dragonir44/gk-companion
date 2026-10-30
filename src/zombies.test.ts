@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { collarFor, fits, masteryFor, planFor, zombiePlans } from "./zombies";
+import { collarFor, fits, masteryFor, planFor, toolsFor, zombiePlans } from "./zombies";
 import type { Entity, GameData, Recipe, TalentNode } from "./types";
 
 const node = (id: string, parents: string[], extra: Partial<TalentNode>): TalentNode => ({
@@ -43,6 +43,12 @@ describe("zombies", () => {
   it("tools fit stations by type and talent", () => {
     expect(fits(hammer("h", 1), anvil)).toBe(true);
     expect(fits(axe, anvil)).toBe(false);
+  });
+
+  it("leaves out the rusty starting tools", () => {
+    const rusty: Entity = { id: "hammer_0", tool: { kind: 4, talents: ["talent_red"], bonus: 1, starter: true } };
+    const withRusty = { ...data, items: [...data.items, rusty] };
+    expect(toolsFor(withRusty, anvil).map((t) => t.id)).toEqual(["hammer_3", "hammer_1"]);
   });
 
   it("counts a perk once even when two nodes grant it", () => {
