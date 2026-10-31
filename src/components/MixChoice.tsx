@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
 import { chosenMix, mixKey } from "../calc";
 import { useActiveList, useStore } from "../store";
@@ -8,6 +8,9 @@ import { Icon } from "./Icon";
 
 const MARKS = ["🔴", "🟢", "🔵"];
 const MAX_SHOWN = 150;
+const MENU_W = 330;
+const MENU_H = 360;
+const GAP = 4;
 
 /** "🔴1 🟢5" for rune counts [red, green, blue]. */
 export function runeText(runes: [number, number, number]): string {
@@ -24,13 +27,42 @@ export function MixChoice({ recipe }: { recipe: Recipe }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const ref = useRef<HTMLSpanElement>(null);
+  // The menu is fixed to the viewport: the planner's columns scroll and
+  // clip, an absolute menu was cut at the column's edge.
+  const [place, setPlace] = useState<CSSProperties>();
 
   useEffect(() => {
     if (!open) return;
     const close = (e: MouseEvent) => ref.current?.contains(e.target as Node) || setOpen(false);
+    // Scrolling the page under a fixed menu would leave it behind.
+    const scrolled = (e: Event) => ref.current?.contains(e.target as Node) || setOpen(false);
+    const resized = () => setOpen(false);
     document.addEventListener("mousedown", close);
-    return () => document.removeEventListener("mousedown", close);
+    document.addEventListener("scroll", scrolled, true);
+    window.addEventListener("resize", resized);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("scroll", scrolled, true);
+      window.removeEventListener("resize", resized);
+    };
   }, [open]);
+
+  const toggle = (button: HTMLElement) => {
+    if (open) return setOpen(false);
+    const r = button.getBoundingClientRect();
+    const below = window.innerHeight - r.bottom - GAP * 2;
+    const above = r.top - GAP * 2;
+    const down = below >= Math.min(MENU_H, above);
+    const width = Math.min(MENU_W, window.innerWidth - GAP * 4);
+    setPlace({
+      position: "fixed",
+      left: Math.max(GAP * 2, Math.min(r.right - width, window.innerWidth - width - GAP * 2)),
+      width,
+      maxHeight: Math.min(MENU_H, down ? below : above),
+      ...(down ? { top: r.bottom + GAP } : { bottom: window.innerHeight - r.top + GAP }),
+    });
+    setOpen(true);
+  };
 
   const allMixes = idx.mixes.get(recipe.id) ?? [];
   const have = ownedFor(stock, list?.have ?? {});
@@ -69,13 +101,13 @@ export function MixChoice({ recipe }: { recipe: Recipe }) {
 
   return (
     <span className="mix-choice" ref={ref} onClick={(e) => e.preventDefault()}>
-      <button className="mix-current" onClick={() => setOpen((o) => !o)} title={t.mixPick}>
+      <button className="mix-current" onClick={(e) => toggle(e.currentTarget)} title={t.mixPick}>
         <span className="runes">{recipe.runes && runeText(recipe.runes)}</span>
         {current?.items.map((i) => <Icon key={i} sprite={n.icon(i)} size={18} />)}
         <span aria-hidden>▾</span>
       </button>
       {open && (
-        <span className="menu mix-menu" role="listbox">
+        <span className="menu mix-menu" role="listbox" style={place}>
           <input autoFocus placeholder={t.mixSearch} value={query} onChange={(e) => setQuery(e.target.value)} />
           <span className="muted small">
             {shown.length} / {mixes.length} {t.mixes}

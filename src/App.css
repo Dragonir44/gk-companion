@@ -997,15 +997,11 @@ li.craft-row.leaf {
   white-space: nowrap;
 }
 .mix-menu {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 4px);
+  /* Placed by MixChoice (fixed, under or over its button). */
   z-index: 20;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  width: 380px;
-  max-height: 360px;
   padding: 8px;
   background: var(--panel);
   border: 1px solid var(--line);
@@ -1048,10 +1044,6 @@ li.craft-row.leaf {
 }
 .craft-name {
   flex: 1 1 auto;
-}
-.mix-menu {
-  width: 330px;
-  max-width: calc(100vw - 48px);
 }
 .stock-tag {
   font-size: 11px;
