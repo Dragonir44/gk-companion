@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 /// Bump when the model changes, so stale caches are re-extracted.
-pub const MODEL_VERSION: u32 = 20;
+pub const MODEL_VERSION: u32 = 21;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -288,6 +288,10 @@ pub struct Work {
     /// A zombie can be assigned to it.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub zombie: bool,
+    /// Objects it works on instead of itself: a gardener's station tends
+    /// the beds of its zone (their crafts and tool are its own).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub beds: Vec<String>,
 }
 
 /// `Work::tool` of stations worked with whatever tool matches the talent.

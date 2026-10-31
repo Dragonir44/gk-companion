@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { fmt } from "../i18n";
 import { bodyFromItems, totals } from "../morgue";
 import { useStore } from "../store";
-import type { Recipe, TalentNode } from "../types";
+import type { Entity, Recipe, TalentNode } from "../types";
 import { collarFor, toolsFor, zombiePlans, type Option } from "../zombies";
 import { fmtNum, Points, useGame } from "./ctx";
 import { Icon } from "./Icon";
@@ -26,15 +26,20 @@ export function ZombiesView() {
       if (r.kind === "craft" && !r.hidden && r.mastery) for (const s of r.stations) m.set(s, [...(m.get(s) ?? []), r]);
     return m;
   }, [data]);
+  // A station's own crafts, or those of the objects it works on (a gardener's beds).
+  const jobOf = useMemo(
+    () => (o: Entity) => [o.id, ...(o.work?.beds ?? [])].flatMap((id) => crafts.get(id) ?? []),
+    [crafts],
+  );
   const stations = useMemo(
-    () => data.objects.filter((o) => o.work?.zombie && crafts.has(o.id)).sort((a, b) => n.name(a.id).localeCompare(n.name(b.id))),
-    [data, crafts, n],
+    () => data.objects.filter((o) => o.work?.zombie && jobOf(o).length).sort((a, b) => n.name(a.id).localeCompare(n.name(b.id))),
+    [data, jobOf, n],
   );
   const [stationId, setStationId] = useState<string>();
   const station = stations.find((s) => s.id === (stationId ?? z?.station)) ?? stations[0];
   const atStation = useMemo(
-    () => (station ? (crafts.get(station.id) ?? []).slice().sort((a, b) => (a.mastery ?? 0) - (b.mastery ?? 0)) : []),
-    [station, crafts],
+    () => (station ? jobOf(station).sort((a, b) => (a.mastery ?? 0) - (b.mastery ?? 0)) : []),
+    [station, jobOf],
   );
   // Crafts left out of the job, per station; by default the locked ones.
   const [off, setOff] = useState<Record<string, string[]>>({});
@@ -45,6 +50,8 @@ export function ZombiesView() {
   const job = useMemo(() => atStation.filter((r) => !excluded.has(r.id)), [atStation, excluded]);
   const setExcluded = (ids: string[]) => station && setOff({ ...off, [station.id]: ids });
   const [speed, setSpeed] = useState(false);
+  // Bed crafts (planting) are named after the bed: show what is sown.
+  const shown = (r: Recipe) => (station?.work?.beds?.length ? r.inputs[0]?.item : r.outputs[0]?.item) ?? r.id;
   const [picked, setPicked] = useState<string>();
 
   const tools = useMemo(() => (station ? toolsFor(data, station) : []), [data, station]);
@@ -100,7 +107,8 @@ export function ZombiesView() {
           >
             {stations.map((s) => (
               <option key={s.id} value={s.id}>
-                {n.name(s.id)} — {talentName(t, s.work!.talent)}
+                {n.name(s.id)}
+                {s.work?.beds?.length ? ` (${s.work.beds.map((b) => n.name(b)).join(", ")})` : ""} — {talentName(t, s.work!.talent)}
               </option>
             ))}
           </select>
@@ -130,8 +138,8 @@ export function ZombiesView() {
                     setExcluded(e.target.checked ? [...excluded].filter((id) => id !== r.id) : [...excluded, r.id])
                   }
                 />
-                <Icon sprite={n.icon(r.outputs[0]?.item ?? r.id) ?? r.icon} size={20} />
-                <span className="grow">{n.recipe(r)}</span>
+                <Icon sprite={n.icon(shown(r)) ?? r.icon} size={20} />
+                <span className="grow">{station?.work?.beds?.length ? n.name(shown(r)) : n.recipe(r)}</span>
                 <span className="qty">{r.mastery}</span>
               </label>
             </li>

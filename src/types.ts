@@ -81,6 +81,8 @@ export interface Work {
   tool: number;
   /** A zombie can be assigned to it. */
   zombie?: boolean;
+  /** Objects it works on instead of itself (a gardener's beds). */
+  beds?: string[];
 }
 
 /** Body parts by role (gk2); skull counts are on the items. */

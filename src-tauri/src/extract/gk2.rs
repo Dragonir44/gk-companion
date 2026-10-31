@@ -199,6 +199,8 @@ fn points(c: &Value) -> BTreeMap<String, f64> {
 /// `redSkullsMaxCollar` of items that are not collars (C# `int.MinValue`).
 const NO_COLLAR: i64 = i32::MIN as i64;
 const MISTAKE_PREFIX: &str = "surgeon_mistake_";
+/// Gardener stations and the beds they tend (garden, vineyard).
+const GARDENER_BEDS: [(&str, &str); 2] = [("garden_crafter", "garden_empty"), ("vineyard_crafter", "vineyard_empty")];
 const UI_TEXTS: [&str; 5] = ["ui_skulls_red", "ui_skulls_white", "zombie_collar", "ui_mastery", "ui_embalming_effect"];
 
 /// Organ slots in body order (`BodyDef.parts`: skin, bones, skull...), the
@@ -595,9 +597,18 @@ pub fn normalize(b: &Value, names: &mut Names) -> Normalized {
         .filter(|w| !text(w, "talent").is_empty())
         .map(|w| {
             let tool = w.get("toolAction").and_then(|t| t.get("actionableTool")).and_then(Value::as_i64).unwrap_or(0);
-            (text(w, "id"), Work { talent: text(w, "talent").to_string(), tool, zombie: flag(w, "canInsertZombie") })
+            (text(w, "id"), Work { talent: text(w, "talent").to_string(), tool, zombie: flag(w, "canInsertZombie"), beds: vec![] })
         })
         .collect();
+    // Gardener stations have no crafts: their zombie plants in the beds of
+    // the station's zone, with a shovel (the beds' tool). Not in the data.
+    let mut work = work;
+    for (station, bed) in GARDENER_BEDS {
+        if let (Some(b), Some(w)) = (work.get(bed).cloned(), work.get_mut(station)) {
+            w.tool = b.tool;
+            w.beds = vec![bed.to_string()];
+        }
+    }
     for o in &mut objects {
         o.work = work.get(o.id.as_str()).cloned();
     }
