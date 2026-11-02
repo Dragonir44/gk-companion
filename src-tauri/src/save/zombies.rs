@@ -41,6 +41,7 @@ pub struct Zombie {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub station: Option<String>,
     /// Everything in the body: organs, extras, embalming, collar, tools.
+    /// A stack of n appears n times.
     pub items: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool: Option<String>,
@@ -77,9 +78,10 @@ struct Wgo {
     body: Option<String>,
     /// Bodies it holds as worker or on its dock points.
     holds: Vec<String>,
-    /// Body items: (id, uniqueId).
+    /// Body items: (id, uniqueId), a stack of n as n entries.
     items: Vec<(String, Option<String>)>,
     item: (Option<String>, Option<String>),
+    item_count: i64,
     attached: Option<String>,
     hand: Option<String>,
     collar: Option<String>,
@@ -220,6 +222,9 @@ pub fn army(bytes: &[u8]) -> Result<Army, SaveError> {
                         _ => {}
                     }
                 }
+                if let Some(w) = wgo.as_mut().filter(|_| field == "count" && rel == ["zombieItem", "inventory", ARRAY, ""]) {
+                    w.item_count = v;
+                }
                 if let (Some(w), []) = (&mut wgo, rel.as_slice()) {
                     let key = match field.as_str() {
                         "techRed" => "r",
@@ -236,8 +241,9 @@ pub fn army(bytes: &[u8]) -> Result<Army, SaveError> {
                 if frame == "zombieItem" && rel.len() == 1 {
                     w.zombie = true;
                 } else if frame.is_empty() && rel == ["zombieItem", "inventory", ARRAY, ""] {
+                    let count = std::mem::take(&mut w.item_count).max(1);
                     if let (Some(id), guid) = std::mem::take(&mut w.item) {
-                        w.items.push((id, guid));
+                        w.items.extend(std::iter::repeat_n((id, guid), count as usize));
                     }
                 }
                 if stack.len() == w.depth {
@@ -382,9 +388,10 @@ mod tests {
         str_field(&mut b, "id", "body_zombie");
         start(&mut b, Some("inventory"));
         arr(&mut b);
-        for (id, g) in [("skin_3_0:3", "i-1"), ("axe_2", "i-2"), ("collar_gold", "i-3")] {
+        for (id, g, count) in [("skin_3_0:3", "i-1", 1), ("axe_2", "i-2", 1), ("collar_gold", "i-3", 1), ("embalm_red:3", "i-4", 2)] {
             start(&mut b, None);
             str_field(&mut b, "id", id);
+            int_field(&mut b, "count", count);
             guid(&mut b, "uniqueId", g);
             b.push(0x05);
         }
@@ -434,7 +441,7 @@ mod tests {
                 object: "zombie_worker".into(),
                 zone: Some("yard".into()),
                 station: Some("sawmill".into()),
-                items: vec!["skin_3_0:3".into(), "axe_2".into(), "collar_gold".into()],
+                items: ["skin_3_0:3", "axe_2", "collar_gold", "embalm_red:3", "embalm_red:3"].map(String::from).to_vec(),
                 tool: Some("axe_2".into()),
                 collar: Some("collar_gold".into()),
                 weapon: None,

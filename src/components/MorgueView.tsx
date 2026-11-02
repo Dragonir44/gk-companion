@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 
 import { fmt, type Strings } from "../i18n";
-import { bestBody, bodyFromItems, emptyBody, fluidOf, OTHER_SLOTS, type Body, type Step, type Totals } from "../morgue";
+import { bestBody, bodyFromItems, countOf, emptyBody, OTHER_SLOTS, room, slotsUsed, type Body, type Step, type Totals } from "../morgue";
 import { useStore } from "../store";
 import type { Recipe } from "../types";
 import { fmtNum, useGame } from "./ctx";
@@ -53,7 +53,12 @@ export function MorgueView() {
     const [r, w] = items.get(id)?.skulls ?? [0, 0];
     return `${n.name(id)} (${r} / ${w})`;
   };
-  const used = body.extras.length + body.embalms.length;
+  const used = slotsUsed(data, body);
+  // Takes one of `id` out of a part list.
+  const without = (list: string[], id: string) => {
+    const k = list.lastIndexOf(id);
+    return list.filter((_, j) => j !== k);
+  };
   const improved = new Set(plan.steps.flatMap((s) => (s.kind === "improve" ? [s.slot] : [])));
 
   return (
@@ -113,28 +118,29 @@ export function MorgueView() {
         </h3>
         <p className="muted small">{fmt(t.embalmsHint, { max: OTHER_SLOTS })}</p>
         <p className="chips">
-          {body.extras.map((id, k) => (
-            <button key={`x${k}`} className="chip on" onClick={() => setBody({ ...body, extras: body.extras.filter((_, j) => j !== k) })}>
-              {label(id)} ×
+          {[...countOf(body.extras)].map(([id, count]) => (
+            <button key={`x${id}`} className="chip on" onClick={() => setBody({ ...body, extras: without(body.extras, id) })}>
+              {label(id)} {count > 1 && `×${count} `}−
             </button>
           ))}
-          {body.embalms.map((id, k) => (
-            <button key={`e${k}`} className="chip on" onClick={() => setBody({ ...body, embalms: body.embalms.filter((_, j) => j !== k) })}>
-              {label(id)} ×
+          {[...countOf(body.embalms)].map(([id, count]) => (
+            <button key={`e${id}`} className="chip on" onClick={() => setBody({ ...body, embalms: without(body.embalms, id) })}>
+              {label(id)} {count > 1 && `×${count} `}−
             </button>
           ))}
-          {used < OTHER_SLOTS &&
-            m.extras.map((id) => (
+          {m.extras
+            .filter((id) => room(data, body, id) > 0)
+            .map((id) => (
               <button key={id} className="chip" onClick={() => setBody({ ...body, extras: [...body.extras, id] })}>
                 + {label(id)}
               </button>
             ))}
         </p>
-        {used < OTHER_SLOTS && (
+        {m.embalms.some((id) => room(data, body, id) > 0) && (
           <select value="" onChange={(e) => e.target.value && setBody({ ...body, embalms: [...body.embalms, e.target.value] })}>
             <option value="">{t.morgueAddEmbalm}</option>
             {m.embalms
-              .filter((id) => !body.embalms.some((e) => fluidOf(e) === fluidOf(id)))
+              .filter((id) => room(data, body, id) > 0)
               .map((id) => (
                 <option key={id} value={id}>
                   {label(id)}
@@ -187,7 +193,10 @@ export function MorgueView() {
             {plan.steps.map((s, i) => (
               <li key={i}>
                 <Icon sprite={n.icon(s.item)} size={24} />
-                <span>{stepText(t, n.name, s)}</span>
+                <span>
+                  {stepText(t, n.name, s)}
+                  {"count" in s && (s.count ?? 1) > 1 && ` ×${s.count}`}
+                </span>
                 <Skulls s={items.get(s.item)?.skulls} />
                 <MasteryTag recipe={s.recipe} />
                 {have && stockShown(s, improved) && (

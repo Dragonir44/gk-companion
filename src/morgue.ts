@@ -8,17 +8,17 @@ export type Goal = "red" | "white";
 
 /**
  * Slots for a body's other parts: flesh, fat and blood (which can only be
- * taken out) share them with embalming fluids, one of each fluid. Not in
- * the game data: from player guides, confirmed in game.
+ * taken out) share them with embalming fluids. A slot holds a stack of one
+ * item (`Entity.stack`: 20 fluids, 99 blood...), and a fluid can be used
+ * again and again. The count is not in the game data: from player guides,
+ * confirmed in game.
  */
 export const OTHER_SLOTS = 6;
-
-/** A fluid whatever its quality (`embalm_red:2` -> `embalm_red`). */
-export const fluidOf = (id: string) => id.split(":")[0];
 
 export interface Body {
   /** Organ per slot (`Morgue.slots` order); null for an empty slot. */
   organs: (string | null)[];
+  /** Flesh, fat, blood; a stack of n appears n times, as in `embalms`. */
   extras: string[];
   /** Fluids already applied: they stay. */
   embalms: string[];
@@ -36,10 +36,10 @@ export interface Totals {
 export type Step =
   | { kind: "insert"; slot: number; item: string; recipe?: Recipe }
   | { kind: "swap"; slot: number; from: string; item: string; recipe?: Recipe }
-  | { kind: "remove"; slot?: number; item: string; recipe?: Recipe }
+  | { kind: "remove"; slot?: number; item: string; recipe?: Recipe; count?: number }
   /** Turn `from` (a spare organ, or the one taken out) into `item` with an organ improver. */
   | { kind: "improve"; slot: number; from: string; item: string; recipe: Recipe }
-  | { kind: "embalm"; item: string; recipe?: Recipe };
+  | { kind: "embalm"; item: string; recipe?: Recipe; count: number };
 
 export interface MorguePlan {
   before: Totals;
@@ -73,6 +73,30 @@ export function bodyFromItems(data: GameData, items: string[]): Body {
 
 function itemsById(data: GameData): Map<string, Entity> {
   return new Map(data.items.map((e) => [e.id, e]));
+}
+
+/** How many of each id a list holds, in first-seen order. */
+export function countOf(ids: string[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const id of ids) counts.set(id, (counts.get(id) ?? 0) + 1);
+  return counts;
+}
+
+const stackOf = (items: Map<string, Entity>, id: string) => items.get(id)?.stack ?? 1;
+
+/** Other-part slots the body fills: one per stack. */
+export function slotsUsed(data: GameData, body: Body): number {
+  const items = itemsById(data);
+  let used = 0;
+  for (const [id, n] of countOf([...body.extras, ...body.embalms])) used += Math.ceil(n / stackOf(items, id));
+  return used;
+}
+
+/** How many more of `id` the body takes: free slots, and what its last stack has left. */
+export function room(data: GameData, body: Body, id: string): number {
+  const stack = stackOf(itemsById(data), id);
+  const held = [...body.extras, ...body.embalms].filter((e) => e === id).length;
+  return (OTHER_SLOTS - slotsUsed(data, body)) * stack + ((stack - (held % stack)) % stack);
 }
 
 export function totals(data: GameData, body: Body): Totals {
@@ -194,21 +218,30 @@ export function bestBody(
       );
   }
 
-  // Best quality of each fluid first; one of each fluid per body.
-  const fluids = m.embalms.filter((id) => value(id)[0] > 0 && left(id) >= 1).sort((a, b) => cmp(b, a));
-  for (const id of fluids) {
-    if (short() <= 0) break;
-    if (next.embalms.some((e) => fluidOf(e) === fluidOf(id))) continue;
-    if (next.extras.length + next.embalms.length >= OTHER_SLOTS) {
-      // Full: make room by taking out the extra worth least, if less than the fluid.
-      const worst = next.extras.reduce<string | undefined>((w, e) => (w === undefined || cmp(e, w) < 0 ? e : w), undefined);
-      if (worst === undefined || cmp(worst, id) >= 0) continue;
-      next.extras.splice(next.extras.indexOf(worst), 1);
-      steps.push({ kind: "remove", item: worst, recipe: recipes.get(`extract_${worst}`) });
+  // Fluids stack and can be used again and again: as many of the best as
+  // the collar, the stock and the free slots allow.
+  const fluids = m.embalms.filter((id) => value(id)[0] > 0).sort((a, b) => cmp(b, a));
+  while (short() > 0) {
+    const ready = fluids.filter((id) => left(id) >= 1);
+    if (!ready.length) break;
+    const count = (id: string) => Math.min(left(id), room(data, next, id), Math.ceil(short() / value(id)[0]));
+    const id = ready.find((f) => count(f) > 0);
+    if (id === undefined) {
+      // Full: make room by taking out one slot of the extra worth least, if less than a slot of fluid.
+      const best = ready[0];
+      const slotOfFluid = Math.min(left(best), stackOf(items, best), Math.ceil(short() / value(best)[0])) * value(best)[0];
+      const slotOf = (e: string) => Math.min(next.extras.filter((x) => x === e).length, stackOf(items, e));
+      const worst = [...new Set(next.extras)].sort((a, b) => slotOf(a) * value(a)[0] - slotOf(b) * value(b)[0])[0];
+      if (worst === undefined || slotOf(worst) * value(worst)[0] >= slotOfFluid) break;
+      const n = slotOf(worst);
+      for (let k = 0; k < n; k++) next.extras.splice(next.extras.indexOf(worst), 1);
+      steps.push({ kind: "remove", item: worst, recipe: recipes.get(`extract_${worst}`), ...(n > 1 && { count: n }) });
+      continue;
     }
-    next.embalms.push(id);
-    take(id);
-    steps.push({ kind: "embalm", item: id, recipe: recipes.get(`embalm_${id}`) });
+    const n = count(id);
+    for (let k = 0; k < n; k++) next.embalms.push(id);
+    take(id, n);
+    steps.push({ kind: "embalm", item: id, recipe: recipes.get(`embalm_${id}`), count: n });
   }
   return { before, after: totals(data, next), body: next, steps, used };
 }

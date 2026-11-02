@@ -14,6 +14,8 @@ export interface Entity {
   runes?: [number, number, number];
   /** Skulls [red, white] the item brings to a body (gk2). */
   skulls?: [number, number];
+  /** How many of a body part or fluid one body slot holds (gk2). */
+  stack?: number;
   /** Zombie collar: most red skulls the zombie keeps. */
   collar?: number;
   tool?: Tool;

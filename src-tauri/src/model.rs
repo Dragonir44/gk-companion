@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 /// Bump when the model changes, so stale caches are re-extracted.
-pub const MODEL_VERSION: u32 = 21;
+pub const MODEL_VERSION: u32 = 22;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -234,6 +234,9 @@ pub struct Entity {
     /// embalming fluids).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub skulls: Option<[i32; 2]>,
+    /// How many of a body part or fluid one body slot holds (gk2, items with skulls).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stack: Option<u32>,
     /// Zombie collar: most red skulls the zombie keeps.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub collar: Option<u32>,
@@ -469,6 +472,7 @@ mod tests {
                 icon: None,
                 runes: None,
                 skulls: None,
+                stack: None,
                 collar: None,
                 tool: None,
                 work: None,

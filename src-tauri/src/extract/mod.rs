@@ -408,6 +408,7 @@ fn entity(names: &mut Names, id: &str) -> Entity {
         icon: None,
         runes: None,
         skulls: None,
+        stack: None,
         collar: None,
         tool: None,
         work: None,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bestBody, bodyFromItems, totals } from "./morgue";
+import { bestBody, bodyFromItems, slotsUsed, totals } from "./morgue";
 import type { Entity, GameData } from "./types";
 
 const item = (id: string, skulls: [number, number], extra: Partial<Entity> = {}): Entity => ({ id, skulls, ...extra });
@@ -19,11 +19,11 @@ const data: GameData = {
     item("heart_2_0", [2, 0]),
     item("surgeon_mistake_heart", [-1, -1]),
     item("fat", [1, 0]),
-    item("embalm_red", [1, 0]),
+    item("embalm_red", [1, 0], { stack: 3 }),
     item("embalm_white:1", [0, 1]),
     item("flesh", [0, 1]),
-    item("embalm_red_white", [1, -1]),
-    item("embalm_white", [0, 2]),
+    item("embalm_red_white", [1, -1], { stack: 3 }),
+    item("embalm_white", [0, 2], { stack: 3 }),
     { id: "collar_bronze", collar: 5 },
     { id: "organ_improver_red" },
   ],
@@ -68,23 +68,38 @@ describe("morgue", () => {
     expect(totals(data, body)).toEqual({ red: 0, white: -1, redKept: 0, cap: 5 });
   });
 
-  it("goes for white: best white organs, one of each fluid at its best", () => {
-    const p = bestBody(data, { ...body, collar: undefined }, "white");
-    expect(p.body.organs).toEqual(["skin_1_3", "heart_2_2"]);
-    // Fat takes no white away: left alone.
-    expect(p.body.extras).toEqual(["fat"]);
-    // embalm_white:1 is the same fluid, lower quality: not added.
-    expect(p.body.embalms).toEqual(["embalm_white"]);
-    expect(p.after.white).toBe(5 + 2);
+  it("counts a stack as one slot, and all of its skulls", () => {
+    const b = bodyFromItems(data, ["embalm_red", "embalm_red", "embalm_red", "embalm_red", "fat"]);
+    expect(slotsUsed(data, b)).toBe(3);
+    expect(totals(data, b).red).toBe(5);
   });
 
-  it("makes room for a fluid by taking out an extra worth less", () => {
+  it("goes for white: best white organs, then the best fluid in every slot", () => {
+    const p = bestBody(data, { ...body, collar: undefined }, "white");
+    expect(p.body.organs).toEqual(["skin_1_3", "heart_2_2"]);
+    // Fat brings no white: its slot is worth more as a stack of fluid.
+    expect(p.body.extras).toEqual([]);
+    // Fluids repeat: 6 stacks of 3, all of the best one.
+    expect(p.body.embalms).toEqual(Array(18).fill("embalm_white"));
+    expect(p.after.white).toBe(5 + 36);
+  });
+
+  it("makes room for fluids by taking out extras worth less", () => {
     const full = { ...body, collar: undefined, extras: ["fat", "fat", "fat", "flesh", "flesh", "flesh"] };
     const p = bestBody(data, full, "white");
-    expect(p.steps.filter((s) => s.kind !== "swap" && s.kind !== "insert")).toEqual([
+    expect(p.steps.filter((s) => s.kind !== "swap" && s.kind !== "insert").slice(0, 2)).toEqual([
       { kind: "remove", item: "fat", recipe: undefined },
-      { kind: "embalm", item: "embalm_white", recipe: undefined },
+      { kind: "embalm", item: "embalm_white", recipe: undefined, count: 3 },
     ]);
+    // Flesh (1 white) goes too: a slot of fluid brings 6.
+    expect(p.body.extras).toEqual([]);
+  });
+
+  it("injects just enough to fill the collar", () => {
+    const p = bestBody(data, { ...body, organs: ["skin_0_0", "heart_0_1"], extras: [] }, "red", { embalm_red: 10 });
+    expect(p.steps).toEqual([{ kind: "embalm", item: "embalm_red", recipe: undefined, count: 5 }]);
+    expect(p.after).toMatchObject({ red: 5, redKept: 5 });
+    expect(slotsUsed(data, p.body)).toBe(2);
   });
 
   it("goes for red, prefers organs without white, stops at the collar", () => {
@@ -132,10 +147,10 @@ describe("morgue", () => {
   it("only uses what is in stock", () => {
     const p = bestBody(data, { ...body, collar: undefined }, "red", { heart_2_2: 1, embalm_red_white: 2 });
     expect(p.body.organs).toEqual(["skin_0_0", "heart_2_2"]);
-    expect(p.used).toEqual({ heart_2_2: 1, embalm_red_white: 1 });
+    expect(p.used).toEqual({ heart_2_2: 1, embalm_red_white: 2 });
     expect(p.steps).toEqual([
       { kind: "swap", slot: 1, from: "surgeon_mistake_heart", item: "heart_2_2", recipe: undefined },
-      { kind: "embalm", item: "embalm_red_white", recipe: undefined },
+      { kind: "embalm", item: "embalm_red_white", recipe: undefined, count: 2 },
     ]);
   });
 });

@@ -551,6 +551,7 @@ pub fn normalize(b: &Value, names: &mut Names) -> Normalized {
         let mut e = item_entity(names, i, "itemSize", "iconId");
         e.runes = Some(runes(i)).filter(|r| r.iter().any(|&n| n > 0));
         e.skulls = Some([num(i, "redSkulls") as i32, num(i, "whiteSkulls") as i32]).filter(|s| s != &[0, 0]);
+        e.stack = e.skulls.and(Some(num(i, "stackCount") as u32)).filter(|&n| n > 1);
         e.collar = Some(num(i, "redSkullsMaxCollar") as i64).filter(|&m| m != NO_COLLAR).map(|m| m as u32);
         let talents = super::strings(i, &["talentIds"]);
         e.tool = (flag(i, "isTool") && !talents.is_empty()).then(|| Tool {
